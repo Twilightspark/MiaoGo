@@ -64,10 +64,13 @@ jobs:
       - name: Fetch Eigen3 headers
         shell: pwsh
         run: |
-          $zip = "$env:RUNNER_TEMP/eigen-3.4.0.zip"
-          Invoke-WebRequest -Uri 'https://github.com/eigenteam/eigen-git-mirror/archive/refs/tags/3.4.0.zip' -OutFile $zip
-          Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP/eigen" -Force
-          Write-Output "EIGEN_INC=$env:RUNNER_TEMP/eigen/eigen-git-mirror-3.4.0" >> $env:GITHUB_ENV
+          # eigen-git-mirror 无 3.4.0 tag，改用 GitLab 官方发布源。
+          $tar = "$env:RUNNER_TEMP/eigen-3.4.0.tar.gz"
+          Invoke-WebRequest -Uri 'https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz' -OutFile $tar
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/eigen" -Force | Out-Null
+          tar -xzf $tar -C "$env:RUNNER_TEMP/eigen"
+          if (-not (Test-Path "$env:RUNNER_TEMP/eigen/eigen-3.4.0/Eigen")) { throw 'Eigen 头文件缺失' }
+          Write-Output "EIGEN_INC=$env:RUNNER_TEMP/eigen/eigen-3.4.0" >> $env:GITHUB_ENV
 
       - name: Build KataGo engine (NDK arm64-v8a)
         shell: pwsh
