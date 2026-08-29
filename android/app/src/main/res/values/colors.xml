@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 强调色 · 棋盘木色 -->
+    <color name="ic_launcher_background">#A56A3A</color>
+    <!-- 主背景 · 宣纸白 -->
+    <color name="launch_background">#F7F2EA</color>
+</resources>

@@ -1,0 +1,91 @@
+name: Release
+
+# 触发：推送 v* tag（如 v1.0.0）或手动执行。
+# 流程：拉取 KataGo 模型 → NDK 编译 KataGo 原生库（libkatago.so）→
+#       构建单 ABI（arm64-v8a）release APK → 生成 GitHub Release 并附带 APK。
+# 说明：模型与引擎二进制均不入 git（体积红线，AGENTS.md §9），由本工作流在构建期准备。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/usr/local/lib/android/sdk' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare build toolchain
+        shell: pwsh
+        run: |
+          # cmake + ninja（KataGo Android 交叉编译依赖）
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build
+          # 定位已预装的 Android NDK 并导出 ANDROID_NDK_HOME
+          $ndk = Get-ChildItem -Path "$env:ANDROID_SDK_ROOT/ndk" -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $ndk) { throw 'Android NDK 未安装于 runner' }
+          Write-Output "ANDROID_NDK_HOME=$($ndk.FullName)" >> $env:GITHUB_ENV
+          Write-Output "ndk=$($ndk.FullName)"
+
+      - name: Fetch KataGo models
+        shell: pwsh
+        run: ./tools/fetch_models.ps1
+
+      - name: Fetch Eigen3 headers
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP/eigen-3.4.0.zip"
+          Invoke-WebRequest -Uri 'https://github.com/eigenteam/eigen-git-mirror/archive/refs/tags/3.4.0.zip' -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP/eigen" -Force
+          Write-Output "EIGEN_INC=$env:RUNNER_TEMP/eigen/eigen-git-mirror-3.4.0" >> $env:GITHUB_ENV
+
+      - name: Build KataGo engine (NDK arm64-v8a)
+        shell: pwsh
+        run: |
+          ./tools/fetch_katago.ps1 `
+            -NdkPath $env:ANDROID_NDK_HOME `
+            -EigenIncludeDir $env:EIGEN_INC `
+            -Abi arm64-v8a
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: miaogo-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MiaoGo ${{ github.ref_name }}
+          body: |
+            ## MiaoGo ${{ github.ref_name }}
+            单 ABI（arm64-v8a）Release 包。See CHANGELOG.md for details.
+          files: build/app/outputs/flutter-apk/app-release.apk

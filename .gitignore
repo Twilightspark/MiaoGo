@@ -1,0 +1,54 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# KataGo 引擎资源（体积红线，AGENTS.md §9，不入仓库；tools 脚本产出）
+# 引擎二进制为原生库（nativeLibraryDir 才可 exec），模型/配置为 assets 数据
+assets/katago/*.gz
+android/app/src/main/jniLibs/arm64-v8a/libkatago.so
+tools/katago-dev/
+
+# 运行时日志（tools 脚本 / 应用写盘，不入仓库）
+gtp_logs/
