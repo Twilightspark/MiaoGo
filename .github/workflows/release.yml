@@ -48,6 +48,15 @@ jobs:
           Write-Output "ANDROID_NDK_HOME=$($ndk.FullName)" >> $env:GITHUB_ENV
           Write-Output "ndk=$($ndk.FullName)"
 
+      # KataGo 模型不入 git（体积红线），缓存 + fetch 补齐（与 ci.yml 同一 key，共享缓存）。
+      - name: Restore KataGo models
+        uses: actions/cache@v5
+        with:
+          path: |
+            assets/katago/kata1-b6c96-s175395328-d26788732.txt.gz
+            assets/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz
+          key: katago-models-v1
+
       - name: Fetch KataGo models
         shell: pwsh
         run: ./tools/fetch_models.ps1
