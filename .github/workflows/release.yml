@@ -75,17 +75,19 @@ jobs:
       - name: Build KataGo engine (NDK arm64-v8a)
         shell: pwsh
         run: |
+          Write-Host "DEBUG NDK=$env:ANDROID_NDK_HOME EIGEN=$env:EIGEN_INC"
           $log = @()
           $failed = $false
           try {
-            $log = & ./tools/fetch_katago.ps1 -NdkPath $env:ANDROID_NDK_HOME -EigenIncludeDir $env:EIGEN_INC -Abi arm64-v8a 2>&1 | ForEach-Object { $_.ToString() }
+            $log = & ./tools/fetch_katago.ps1 -NdkPath $env:ANDROID_NDK_HOME -EigenIncludeDir $env:EIGEN_INC -Abi arm64-v8a *>&1 | ForEach-Object { $_.ToString() }
           } catch {
             $failed = $true
             $log += "TERMINATING: $($_.Exception.Message)"
+            $log += "AT: $($_.InvocationInfo.PositionMessage)"
           }
           $log | ForEach-Object { Write-Host $_ }
           if ($failed -or $LASTEXITCODE -ne 0) {
-            $log | Select-Object -Last 60 | ForEach-Object { "::error::$_" }
+            $log | Select-Object -Last 80 | ForEach-Object { "::error::$_" }
             exit 1
           }
 
