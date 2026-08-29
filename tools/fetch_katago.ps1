@@ -97,6 +97,10 @@ $ndk = Resolve-PathOrThrow $ndk 'Android NDK 路径（-NdkPath / ANDROID_NDK_HOM
 # CMake 生成 CMakeSystem.cmake 时需正斜杠路径（反斜杠会触发转义错误）
 $ndkFwd = ($ndk -replace '\\', '/')
 
+# 临时目录（GitHub Linux runner 不设 $env:TEMP，须用 GetTempPath() 兜底）
+$tempRoot = $env:RUNNER_TEMP
+if ([string]::IsNullOrWhiteSpace($tempRoot)) { $tempRoot = [System.IO.Path]::GetTempPath() }
+
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if (-not $cmake) {
   # 未在 PATH：回退到 Android SDK 自带 cmake
@@ -113,7 +117,7 @@ if (-not $cmake) { throw '未找到 cmake，请先安装并加入 PATH，或设�
 $out = Join-Path (Get-Location) $OutDir
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 
-$src = Join-Path $env:TEMP "katago-$Version"
+$src = Join-Path $tempRoot "katago-$Version"
 if (Test-Path -LiteralPath $src) { Remove-Item -LiteralPath $src -Recurse -Force }
 Write-Host "克隆 KataGo $Version ..."
 git clone --depth 1 --branch $Version https://github.com/lightvector/KataGo.git $src
@@ -121,7 +125,7 @@ if ($LASTEXITCODE -ne 0) { throw 'git clone 失败' }
 
 # Eigen3 头文件（KataGo 仓库不附带）
 $eigen = $EigenIncludeDir
-if ([string]::IsNullOrWhiteSpace($eigen)) { $eigen = Join-Path $env:TEMP 'eigen-3.4.0' }
+if ([string]::IsNullOrWhiteSpace($eigen)) { $eigen = Join-Path $tempRoot 'eigen-3.4.0' }
 if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen'))) {
   throw "未找到 Eigen3 头文件（含 Eigen/ 与 unsupported/）：$eigen。请先解压 eigen-3.4.0 到该目录，或 -EigenIncludeDir 指定。"
 }
