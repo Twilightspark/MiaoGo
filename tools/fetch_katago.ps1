@@ -133,34 +133,46 @@ $build = Join-Path $srcCpp 'build'
 $cmakeBin = if ($cmake -is [System.Management.Automation.CommandInfo]) { $cmake.Source } else { $cmake.FullName }
 $cmakeBin = $cmakeBin -replace '\\', '/'
 
-# Ninja（Android 构建必需）：优先取 cmake 同目录（Android SDK cmake 自带）
-$ninja = Join-Path (Split-Path $cmakeBin) 'ninja.exe'
-if (-not (Test-Path -LiteralPath $ninja)) { $ninja = '' }
+# Ninja（Android 构建必需）：优先取 cmake 同目录（Android SDK cmake 自带 ninja.exe/ninja），
+# 其次 PATH 中的 ninja（Linux runner）。
+$ninja = ''
+foreach ($cand in @((Join-Path (Split-Path $cmakeBin) 'ninja.exe'), (Join-Path (Split-Path $cmakeBin) 'ninja'))) {
+  if (Test-Path -LiteralPath $cand) { $ninja = $cand; break }
+}
+if (-not $ninja) {
+  $ninjaCmd = Get-Command ninja -ErrorAction SilentlyContinue
+  if ($ninjaCmd) { $ninja = $ninjaCmd.Source }
+}
 
 # sha2.cpp 依赖 BYTE_ORDER 宏（Android bionic 默认不提供），统一按小端定义。
 $byteOrder = '-DBYTE_ORDER=1234 -DLITTLE_ENDIAN=1234 -DBIG_ENDIAN=4321'
 
+$cmakeArgs = @(
+  '-G', 'Ninja',
+  '-B', $build,
+  "-DCMAKE_SYSTEM_NAME=Android",
+  "-DCMAKE_ANDROID_NDK=$ndkFwd",
+  "-DCMAKE_ANDROID_ARCH_ABI=$Abi",
+  '-DANDROID_PLATFORM=24',
+  '-DCMAKE_BUILD_TYPE=Release',
+  "-DCMAKE_C_FLAGS=$byteOrder",
+  "-DCMAKE_CXX_FLAGS=$byteOrder",
+  '-DBUILD_DISTRIBUTED=OFF',
+  '-DUSE_BACKEND=EIGEN',
+  '-DUSE_GZIP=ON',
+  "-DEIGEN3_INCLUDE_DIRS=$($eigen -replace '\\', '/')"
+)
+if ($ninja) { $cmakeArgs += "-DCMAKE_MAKE_PROGRAM=$ninja" }
+$cmakeArgs += $srcCpp
+
 Write-Host "CMake 配置（$Abi）：$cmakeBin"
-& $cmakeBin -G Ninja -B $build `
-  "-DCMAKE_SYSTEM_NAME=Android" `
-  "-DCMAKE_ANDROID_NDK=$ndkFwd" `
-  "-DCMAKE_ANDROID_ARCH_ABI=$Abi" `
-  "-DANDROID_PLATFORM=24" `
-  "-DCMAKE_BUILD_TYPE=Release" `
-  "-DCMAKE_MAKE_PROGRAM=$ninja" `
-  "-DCMAKE_C_FLAGS=$byteOrder" `
-  "-DCMAKE_CXX_FLAGS=$byteOrder" `
-  "-DBUILD_DISTRIBUTED=OFF" `
-  "-DUSE_BACKEND=EIGEN" `
-  "-DUSE_GZIP=ON" `
-  "-DEIGEN3_INCLUDE_DIRS=$($eigen -replace '\\', '/')" `
-  $srcCpp
-if ($LASTEXITCODE -ne 0) { throw 'cmake configure 失败' }
+& $cmakeBin @cmakeArgs
+if ($LASTEXITCODE -ne 0) { throw "cmake configure 失败（exit $LASTEXITCODE）" }
 
 Write-Host "编译（多核）..."
 $cores = [System.Environment]::ProcessorCount
 & $cmakeBin --build $build -j $cores
-if ($LASTEXITCODE -ne 0) { throw 'cmake build 失败' }
+if ($LASTEXITCODE -ne 0) { throw "cmake build 失败（exit $LASTEXITCODE）" }
 
 $bin = Join-Path $build 'katago'
 if (-not (Test-Path -LiteralPath $bin)) { throw "编译产物缺失: $bin" }
