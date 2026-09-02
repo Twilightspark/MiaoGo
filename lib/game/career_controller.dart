@@ -122,6 +122,7 @@ class CareerController extends Notifier<CareerState> {
       points: 0,
       champion: false,
       withdrawn: true,
+      tournamentId: active.id,
     );
     _persist(CareerState(
       active: null,
@@ -206,6 +207,7 @@ class CareerController extends Notifier<CareerState> {
       points: points,
       champion: champion,
       withdrawn: withdrawn,
+      tournamentId: tournament.id,
     );
     _persist(CareerState(
       active: null,

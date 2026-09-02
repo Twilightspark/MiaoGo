@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:miaogo/app.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/ui/play/career_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 首页不再直连生涯页，故直接以生涯主页启动（对退出/报名/赛程的子系统测试）。
 Future<void> pumpToCareer(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3.0;
@@ -14,14 +15,9 @@ Future<void> pumpToCareer(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const MiaoGoApp(),
+      child: const MaterialApp(home: CareerPage()),
     ),
   );
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.byKey(const ValueKey('home_card_quick_play')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('生涯模式'));
   await tester.pumpAndSettle();
 }
 

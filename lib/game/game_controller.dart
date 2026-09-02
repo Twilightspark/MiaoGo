@@ -172,6 +172,9 @@ class GameController extends Notifier<GameState> {
   /// 本局棋谱来源（生涯对局用 [GameSource.career]）。
   GameSource _source = GameSource.ai;
 
+  /// 本局所属生涯大赛 id（人机/研究等为 null）。
+  String? _tournamentId;
+
   /// 本局主动点目申请被拒绝的次数（≥3 后不再申请）。
   int _scoreRefusals = 0;
 
@@ -199,6 +202,7 @@ class GameController extends Notifier<GameState> {
   ///
   /// [opponentName] 为空时默认 `AI · 段位`；[source] 标记棋谱来源
   /// （人机 [GameSource.ai] / 生涯 [GameSource.career]）。
+  /// [tournamentId] 为所属生涯大赛 id（人机等传 null），用于赛事复盘关联。
   void startNewGame({
     required int size,
     required GoRule rule,
@@ -207,11 +211,13 @@ class GameController extends Notifier<GameState> {
     required int difficulty,
     String? opponentName,
     GameSource source = GameSource.ai,
+    String? tournamentId,
   }) {
     _session++;
     _scoreRefusals = 0;
     _opponentName = opponentName ?? '';
     _source = source;
+    _tournamentId = tournamentId;
     state = GameState(
       boardSize: size,
       rule: rule,
@@ -467,6 +473,7 @@ class GameController extends Notifier<GameState> {
       sgfPath: '',
       source: _source,
       moveCount: s.moves.length,
+      tournamentId: _tournamentId,
       sgfContent: Sgf.build(
         size: s.boardSize,
         rules: s.rule.name,

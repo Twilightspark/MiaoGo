@@ -30,6 +30,7 @@ class GamePage extends ConsumerStatefulWidget {
     required this.difficulty,
     this.opponentName,
     this.source = GameSource.ai,
+    this.tournamentId,
   });
 
   final int size;
@@ -39,6 +40,7 @@ class GamePage extends ConsumerStatefulWidget {
   final int difficulty;
   final String? opponentName;
   final GameSource source;
+  final String? tournamentId;
 
   @override
   ConsumerState<GamePage> createState() => _GamePageState();
@@ -82,6 +84,7 @@ class _GamePageState extends ConsumerState<GamePage> {
           difficulty: widget.difficulty,
           opponentName: widget.opponentName,
           source: widget.source,
+          tournamentId: widget.tournamentId,
         );
   }
 

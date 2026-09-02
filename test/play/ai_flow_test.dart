@@ -2,15 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaogo/app.dart';
+import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/gtp_client.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/game_controller.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/board_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/mock_gtp_io.dart';
+
+/// 小型题库（避免首页每日一题加载全量资产）。
+Future<ProblemLibrary> _fakeLibrary() async {
+  const sgf = '(;SZ[9]AW[ee][ff]AB[ed][fe]C[Black to play];B[dd]C[Correct 捕获两子])';
+  return ProblemLibrary([
+    for (var i = 1; i <= 5; i++)
+      Problem.fromGame(
+        id: 'daily$i',
+        title: '每日 第 $i 题',
+        difficulty: ProblemDifficulty.beginner,
+        asset: 'x$i.sgf',
+        game: Sgf.parse(sgf),
+      ),
+  ]);
+}
 
 /// 引擎已就绪的假控制器：挂载脚本化引擎，供 KataGo 选点/分析全链路走通。
 class _ReadyEngineController extends EngineController {
@@ -77,6 +94,7 @@ Future<void> pumpToGame(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        problemLibraryProvider.overrideWith((ref) => _fakeLibrary()),
         engineStatusProvider.overrideWith(
           () => _ReadyEngineController(_scriptedEngine()),
         ),
@@ -90,9 +108,8 @@ Future<void> pumpToGame(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  await tester.tap(find.byKey(const ValueKey('home_card_quick_play')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('人机模式'));
+  // 首页「快速对弈 + 开始」→ 直接进入人机对弈设置页。
+  await tester.tap(find.byKey(const ValueKey('home_quick_play_button')));
   await tester.pumpAndSettle();
 }
 

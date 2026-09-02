@@ -60,6 +60,7 @@ class _TournamentBracketPageState
         difficulty: opponent.rankIndex,
         opponentName: opponent.name,
         source: GameSource.career,
+        tournamentId: tournament.id,
       ),
     ));
     if (!mounted) return;

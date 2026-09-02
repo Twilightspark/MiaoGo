@@ -151,6 +151,7 @@ void main() {
         placement: 1,
         points: 90,
         champion: true,
+        tournamentId: 't1',
       );
       final r2 = CareerResult.fromJson(r.toJson());
       expect(r2.id, r.id);
@@ -160,6 +161,7 @@ void main() {
       expect(r2.placement, r.placement);
       expect(r2.points, r.points);
       expect(r2.champion, r.champion);
+      expect(r2.tournamentId, r.tournamentId);
     });
   });
 

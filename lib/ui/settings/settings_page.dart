@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/game/career_controller.dart';
+import 'package:miaogo/storage/checkin_store.dart';
+import 'package:miaogo/storage/problem_store.dart';
+import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
-import 'package:miaogo/ui/common/rank_badge.dart';
+import 'package:miaogo/ui/common/avatar.dart';
 
-/// 设置页：名称 / 棋盘大小 / 对弈规则 / 贴目 / 音效 / 恢复默认 / 关于。
+/// 设置页：名称/头像 / 棋盘大小 / 对弈规则 / 贴目 / 音效 / 恢复默认 / 关于 / 重生棋手。
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -26,7 +29,16 @@ class SettingsPage extends ConsumerWidget {
             elevation: 0,
             color: theme.colorScheme.surfaceContainerHighest,
             child: ListTile(
-              leading: RankBadge(rankIndex: profile.rankIndex, size: 24),
+              leading: InkWell(
+                key: const ValueKey('settings_avatar'),
+                customBorder: const CircleBorder(),
+                onTap: () => showAvatarChangeDialog(context, ref),
+                child: AvatarView(
+                  avatarPath: profile.avatarPath,
+                  name: profile.name,
+                  radius: 22,
+                ),
+              ),
               title: Text(profile.name),
               subtitle: Text(
                 '${RankSystem.rankName(profile.rankIndex)} · '
@@ -111,6 +123,21 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 24),
+          Center(
+            child: TextButton(
+              key: const ValueKey('settings_rebirth'),
+              onPressed: () => _confirmRebirth(context, ref),
+              child: Text(
+                '重生棋手',
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -171,11 +198,39 @@ class SettingsPage extends ConsumerWidget {
     }
   }
 
+  Future<void> _confirmRebirth(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重生'),
+        content: const Text(
+            '重生将初始化棋手信息与全部进度（名称、段位、积分、对局记录、赛事、打卡与做题进度），确定继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      ref.read(userProfileProvider.notifier).reset();
+      ref.read(careerControllerProvider.notifier).reset();
+      ref.read(recordStoreProvider.notifier).clear();
+      ref.read(checkinStoreProvider.notifier).reset();
+      ref.read(problemStoreProvider.notifier).reset();
+    }
+  }
+
   void _showAbout(BuildContext context) {
     showAboutDialog(
       context: context,
       applicationName: '喵棋 MiaoGo',
-      applicationVersion: '1.0.0',
+      applicationVersion: '1.1.0',
       applicationIcon: const Icon(Icons.grid_on, size: 40),
       children: const [Text('本地 KataGo 引擎驱动的围棋对弈与学习应用。')],
     );

@@ -40,6 +40,7 @@ class GameRecord {
     required this.sgfPath,
     required this.source,
     required this.moveCount,
+    this.tournamentId,
     this.sgfContent,
   });
 
@@ -54,6 +55,9 @@ class GameRecord {
   final String sgfPath;
   final GameSource source;
   final int moveCount;
+
+  /// 生涯大赛 id（无则为空；用于赛事复盘定位本赛事对局）。
+  final String? tournamentId;
 
   /// SGF 内容（写入文件后不入索引持久化）。
   final String? sgfContent;
@@ -70,6 +74,7 @@ class GameRecord {
         sgfPath: sgfPath ?? this.sgfPath,
         source: source,
         moveCount: moveCount,
+        tournamentId: tournamentId,
         sgfContent: sgfContent ?? this.sgfContent,
       );
 
@@ -85,6 +90,7 @@ class GameRecord {
         'sgfPath': sgfPath,
         'source': source.name,
         'moveCount': moveCount,
+        'tournamentId': tournamentId,
       };
 
   factory GameRecord.fromJson(Map<String, dynamic> json) => GameRecord(
@@ -103,6 +109,7 @@ class GameRecord {
         source: GameSource.values.firstWhere((e) => e.name == json['source'],
             orElse: () => GameSource.ai),
         moveCount: (json['moveCount'] as num?)?.toInt() ?? 0,
+        tournamentId: json['tournamentId'] as String?,
       );
 }
 

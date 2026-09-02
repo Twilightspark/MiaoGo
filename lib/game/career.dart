@@ -287,6 +287,7 @@ class CareerResult {
     required this.date,
     required this.placement,
     required this.points,
+    required this.tournamentId,
     this.champion = false,
     this.withdrawn = false,
   });
@@ -304,6 +305,9 @@ class CareerResult {
   /// 提前退赛（无任何积分）。
   final bool withdrawn;
 
+  /// 该赛事 id（用于关联本赛个人对局）。
+  final String tournamentId;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'tournamentName': tournamentName,
@@ -313,6 +317,7 @@ class CareerResult {
         'points': points,
         'champion': champion,
         'withdrawn': withdrawn,
+        'tournamentId': tournamentId,
       };
 
   factory CareerResult.fromJson(Map<String, dynamic> json) => CareerResult(
@@ -325,6 +330,7 @@ class CareerResult {
         points: (json['points'] as num?)?.toInt() ?? 0,
         champion: json['champion'] as bool? ?? false,
         withdrawn: json['withdrawn'] as bool? ?? false,
+        tournamentId: json['tournamentId'] as String? ?? '',
       );
 }
 

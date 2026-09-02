@@ -53,6 +53,12 @@ class ProblemStore extends Notifier<Map<String, ProblemStatus>> {
   /// 某题是否已完成。
   bool isSolved(String problemId) => state[problemId]?.solved ?? false;
 
+  /// 清空全部做题进度（重生用）。
+  void reset() {
+    state = const {};
+    _persist();
+  }
+
   void _persist() {
     ref.read(sharedPreferencesProvider).setString(
           _key,

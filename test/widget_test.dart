@@ -2,8 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaogo/app.dart';
+import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/study/problem_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// 小型题库：5 题，保证每日一题进度「0/5」且加载迅速。
+Future<ProblemLibrary> _fakeLibrary() async {
+  const sgf = '(;SZ[9]AW[ee][ff]AB[ed][fe]C[Black to play];B[dd]C[Correct 捕获两子])';
+  return ProblemLibrary([
+    for (var i = 1; i <= 5; i++)
+      Problem.fromGame(
+        id: 'daily$i',
+        title: '每日 第 $i 题',
+        difficulty: ProblemDifficulty.beginner,
+        asset: 'x$i.sgf',
+        game: Sgf.parse(sgf),
+      ),
+  ]);
+}
 
 Future<void> pumpApp(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1080, 2400);
@@ -13,7 +30,10 @@ Future<void> pumpApp(WidgetTester tester) async {
   final prefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        problemLibraryProvider.overrideWith((ref) => _fakeLibrary()),
+      ],
       child: const MiaoGoApp(),
     ),
   );
@@ -21,116 +41,115 @@ Future<void> pumpApp(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('首页渲染用户区与功能入口（默认 18级 / 0 积分，无底部导航栏）',
+  testWidgets('首页渲染用户区与统计卡（默认 18级 / 0 积分，无底部导航栏）',
       (tester) async {
     await pumpApp(tester);
 
     expect(find.byType(NavigationBar), findsNothing);
 
-    // 用户区：头像、名称 棋手、等级 18级、设置按钮
+    // 用户区：头像、名称，无等级徽章；设置按钮
     expect(find.byKey(const ValueKey('home_avatar')), findsOneWidget);
     expect(find.byKey(const ValueKey('home_username')), findsOneWidget);
-    expect(find.text('棋手'), findsWidgets);
-    expect(find.text('18级'), findsWidgets);
     expect(find.byKey(const ValueKey('home_settings')), findsOneWidget);
+    expect(find.text('棋手'), findsWidgets);
 
-    // 功能入口
-    for (final title in ['快速对局', '参加竞赛', '今日学习', '棋谱', '功课']) {
-      expect(find.text(title), findsOneWidget);
+    // 统计卡四栏
+    expect(find.text('打卡天数'), findsOneWidget);
+    expect(find.text('对局数量'), findsOneWidget);
+    expect(find.text('棋手积分'), findsOneWidget);
+    expect(find.text('当前棋力'), findsOneWidget);
+    expect(find.text('18级'), findsWidgets);
+
+    // 每日一题 / 快速对弈 / 赛事生涯
+    expect(find.text('每日一题'), findsOneWidget);
+    expect(find.text('做题'), findsOneWidget);
+    expect(find.text('快速对弈'), findsOneWidget);
+    expect(find.text('赛事生涯'), findsOneWidget);
+
+    // 快捷入口
+    for (final label in ['入门', '定式', '题库', '棋谱']) {
+      expect(find.text(label), findsWidgets);
     }
-    expect(find.text('0 分'), findsNothing);
   });
 
   testWidgets('点击首页入口跳转对应页面', (tester) async {
     await pumpApp(tester);
 
-    Future<void> tapKey(String key) async {
-      final finder = find.byKey(ValueKey(key));
-      await tester.ensureVisible(finder);
-      await tester.pumpAndSettle();
-      await tester.tap(finder);
-      await tester.pumpAndSettle();
-    }
-
-    // 快速对局 → 对弈页
-    await tapKey('home_card_quick_play');
-    expect(find.text('生涯模式'), findsOneWidget);
-    await tester.pageBack();
+    // 快捷入口「入门」→ 入门基础页
+    await tester.tap(find.byKey(const ValueKey('home_quick_entry_入门')));
     await tester.pumpAndSettle();
-
-    // 参加竞赛 → 对弈页
-    await tapKey('home_card_tournament');
-    expect(find.text('人机模式'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    // 今日学习 → 功课页
-    await tapKey('home_card_daily_study');
     expect(find.text('入门基础'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // 棋谱按钮 → 棋谱页
-    await tapKey('home_button_record');
-    expect(find.text('个人棋谱'), findsOneWidget);
-    await tester.pageBack();
+    // 当前赛事「报名」→ 弹窗列出待报名赛事
+    await tester.tap(find.byKey(const ValueKey('home_tournament_signup')));
     await tester.pumpAndSettle();
+    expect(find.text('报名大赛'), findsOneWidget);
+    expect(find.byKey(const ValueKey('signup_option_9')), findsOneWidget);
+    expect(find.byKey(const ValueKey('signup_option_13')), findsOneWidget);
+    expect(find.byKey(const ValueKey('signup_option_19')), findsOneWidget);
 
-    // 功课按钮 → 功课页
-    await tapKey('home_button_study');
-    expect(find.text('定式布局'), findsOneWidget);
-    await tester.pageBack();
+    // 报名 9 路 → 卡片切换为「比赛」
+    await tester.tap(find.byKey(const ValueKey('signup_button_9')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home_tournament_continue')), findsOneWidget);
 
     // 设置按钮 → 设置页
-    await tapKey('home_settings');
+    await tester.tap(find.byKey(const ValueKey('home_settings')));
+    await tester.pumpAndSettle();
     expect(find.text('棋盘大小'), findsOneWidget);
   });
 
-  testWidgets('点击头像弹出头像弹窗', (tester) async {
+  testWidgets('每日一题「做题」进入每日一题会话页', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.byKey(const ValueKey('home_avatar')));
+    await tester.tap(find.byKey(const ValueKey('home_daily_start')));
+    await tester.pumpAndSettle();
+    expect(find.text('今日 5 题 · 已解 0'), findsOneWidget);
+  });
+
+  testWidgets('设置页点击头像弹出头像修改框', (tester) async {
+    await pumpApp(tester);
+
+    // 首页头像不可点击，进入设置页点击头像弹出修改框
+    await tester.tap(find.byKey(const ValueKey('home_settings')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('settings_avatar')));
     await tester.pumpAndSettle();
     expect(find.text('更换头像'), findsOneWidget);
 
-    // 关闭弹窗
+    // 点击更换头像（测试环境无相册 → 关闭弹窗）
     await tester.tap(find.text('更换头像'));
     await tester.pumpAndSettle();
     expect(find.text('更换头像'), findsNothing);
   });
 
-  testWidgets('点击用户名弹出用户详情弹窗：改名与统计', (tester) async {
+  testWidgets('设置页底部「重生棋手」二次确认后重置用户', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.byKey(const ValueKey('home_username')));
+    await tester.tap(find.byKey(const ValueKey('home_settings')));
     await tester.pumpAndSettle();
 
-    expect(find.text('改名'), findsOneWidget);
-    expect(find.text('重生'), findsOneWidget);
-    expect(find.text('当前等级'), findsOneWidget);
-    expect(find.text('积分'), findsOneWidget);
-    expect(find.text('参赛次数'), findsOneWidget);
-    expect(find.text('冠军次数'), findsOneWidget);
-    expect(find.text('胜率'), findsOneWidget);
-    expect(find.text('18级'), findsWidgets);
-    expect(find.text('0'), findsWidgets);
-
-    // 改名
-    await tester.tap(find.text('改名'));
+    // 改名便于校验重生重置
+    await tester.tap(find.byType(ListTile).first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '喵棋大师');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(find.text('喵棋大师'), findsWidgets);
 
-    // 重生：二次确认后初始化用户信息
-    await tester.tap(find.text('重生'));
+    // 重生：二次确认后初始化全部进度
+    await tester.tap(find.byKey(const ValueKey('settings_rebirth')));
     await tester.pumpAndSettle();
-    expect(find.text('重生将初始化用户信息（名称、段位、积分与全部统计），确定继续？'),
+    expect(
+        find.text(
+            '重生将初始化棋手信息与全部进度（名称、段位、积分、对局记录、赛事、打卡与做题进度），确定继续？'),
         findsOneWidget);
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
+    expect(find.text('喵棋大师'), findsNothing);
     expect(find.text('棋手'), findsWidgets);
   });
 }
