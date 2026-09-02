@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.0.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.1.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -30,7 +30,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 
 | 页面 Page | 内容 Highlights |
 |---|---|
-| **首页 · Home** | 用户条（头像 / 名称 / 段位徽章 / 大赛积分）+ 四张功能入口卡片 + 底部 5-Tab。Player card (avatar / name / rank badge / tournament points) + 4 entry cards + bottom tabs. |
+| **首页 · Home** | 顶部用户区（头像 / 名称 / 设置）+ 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 统一功能卡（每日一题 · 快速对弈 · 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录。Sticky user header (avatar / name / settings) + stats card + unified feature cards (daily problem / quick play / career tournament) + quick entries + lazy-loaded game & tournament history. |
 | **对弈 · Play** | **生涯模式**（随机大赛、积分升降级）与**人机模式**（自由选段位 / 尺寸 / 规则）。共用对局页：悔棋、认输、PASS、实时 ownership 热力图、AI 建议下一步、终局数子、保存棋谱。Career tournament mode (auto-generated bracket, rank promotion via points) & Free-play mode. Shared game page: undo, resign, pass, real-time ownership heatmap, AI next-move hints, scoring, SGF save. |
 | **棋谱 · Records** | 个人棋谱 / 历史名谱 / 研究棋谱；复盘：逐步回放、任意手位看势力范围、AI 分析下一手、终局数子。Personal games, 11 historical famous games, and review with per-move territory + AI analysis. |
 | **功课 · Study** | 入门基础（规则 / 术语图文）、定式布局（SGF 序列 + 讲解）、**422 道死活题**（答题判定 + 正解讲解 + 进度）。Lessons, joseki patterns, and 422 graded life-and-death problems with solutions & progress. |
@@ -76,6 +76,7 @@ miaogo/
 │   ├── problems/             # 422 道死活题 SGF
 │   ├── famous/               # 11 局历史名谱 SGF
 │   ├── lessons/              # 定式布局 SGF + 讲解
+│   ├── icons/                # 首页 SVG 语义色图标（做题/对弈/竞赛/入门/定式/题库/棋谱/历史/比赛）
 │   └── icon/                 # 应用图标
 ├── lib/
 │   ├── core/                 # 纯 Dart 领域逻辑：棋盘/规则/数子/段位/SGF（可单测）
@@ -129,15 +130,24 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 
 ## 路线图 · Roadmap
 
-### 1.0.0（当前 · Current）
+### 1.1.0（当前 · Current）
+
+首页重构与视觉统一 + 玩家进度体系。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
+
+- 顶部用户区固定（头像 / 名称 / 设置同一水平线居中），去掉段位徽章与名称弹窗
+- 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 每日一题（日期种子 5 题，完成即打卡）
+- 三张统一功能卡（每日一题 / 快速对弈 / 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录（空态居中）
+- SVG 图标体系：`assets/icons` 9 枚语义色图标 + `AppIconTile` 统一圆底图标瓦片
+- 设置页：等级 tag 改头像（点击弹头像修改框）、底部红色「重生棋手」一键重置全部进度
+- 赛事对局 ↔ 棋谱（`tournamentId`）贯通，竞赛历史可复盘单局
+
+### 1.0.0
 
 功能基本完成：5-Tab 全模块、人机对弈闭环、KataGo 双模型分析、生涯模式、棋谱与功课模块。
 
-### 1.0.x（功能打磨与 Bug 修复 · Polish & Bugfixes）
+### 后续打磨 · Polish
 
-在 1.0 小版本之间迭代，不新增大型功能：
-
-- 完善功能展示效果：棋盘/棋子风格、棋盘大小、对局中切规则、引擎高级参数的可视化与交互打磨
+- 完善功能展示效果：棋盘/棋子风格、对局中切规则、引擎高级参数的可视化与交互打磨
 - 视觉与动画打磨（落子/提子/升降级/热力图过渡效果）
 - **真机校准 27 档难度参数表**（校准工具产出的实测值写回默认配置）
 - 修复各模块已发现的功能 Bug，补充边界用例
@@ -165,6 +175,7 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 | [path_provider](https://pub.dev/packages/path_provider) | 应用目录路径 | BSD-3-Clause |
 | [image_picker](https://pub.dev/packages/image_picker) | 头像选择 | BSD-3-Clause |
 | [crop_your_image](https://pub.dev/packages/crop_your_image) | 头像裁剪 | MIT |
+| [flutter_svg](https://pub.dev/packages/flutter_svg) | SVG 图标渲染 | MIT |
 | [cupertino_icons](https://pub.dev/packages/cupertino_icons) | 图标 | MIT |
 | [flutter_launcher_icons](https://pub.dev/packages/flutter_launcher_icons) | 应用图标生成 | MIT |
 | [flutter_lints](https://pub.dev/packages/flutter_lints) | 静态检查 | BSD-3-Clause |
