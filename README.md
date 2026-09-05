@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.1.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.2.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -31,7 +31,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 | 页面 Page | 内容 Highlights |
 |---|---|
 | **首页 · Home** | 顶部用户区（头像 / 名称 / 设置）+ 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 统一功能卡（每日一题 · 快速对弈 · 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录。Sticky user header (avatar / name / settings) + stats card + unified feature cards (daily problem / quick play / career tournament) + quick entries + lazy-loaded game & tournament history. |
-| **对弈 · Play** | **生涯模式**（随机大赛、积分升降级）与**人机模式**（自由选段位 / 尺寸 / 规则）。共用对局页：悔棋、认输、PASS、实时 ownership 热力图、AI 建议下一步、终局数子、保存棋谱。Career tournament mode (auto-generated bracket, rank promotion via points) & Free-play mode. Shared game page: undo, resign, pass, real-time ownership heatmap, AI next-move hints, scoring, SGF save. |
+| **对弈 · Play** | **生涯模式**（随机大赛、积分升降级）与**人机模式**（自由选段位 / 尺寸 / 规则 / 落子方式）。共用对局页：顶部选手卡片、两步/双击落子、悔棋、停手、实时 ownership 热力图、胜率走势曲线、保存续弈与弃局、终局数子、保存棋谱。Career tournament mode & Free-play mode. Shared game page: player cards, two-step/double-tap placement, undo, pass, real-time ownership heatmap, black-winrate curve, save/resume & abandon, scoring, SGF save. |
 | **棋谱 · Records** | 个人棋谱 / 历史名谱 / 研究棋谱；复盘：逐步回放、任意手位看势力范围、AI 分析下一手、终局数子。Personal games, 11 historical famous games, and review with per-move territory + AI analysis. |
 | **功课 · Study** | 入门基础（规则 / 术语图文）、定式布局（SGF 序列 + 讲解）、**422 道死活题**（答题判定 + 正解讲解 + 进度）。Lessons, joseki patterns, and 422 graded life-and-death problems with solutions & progress. |
 | **设置 · Settings** | 棋盘 / 棋子风格、棋盘大小（9 / 13 / 19）、对弈规则（中 / 韩 / 日，贴目联动）、音效、关于与数据清除。Board & stone styles, board size, ruleset, sound, about & data reset. |
@@ -130,7 +130,11 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 
 ## 路线图 · Roadmap
 
-### 1.1.0（当前 · Current）
+### 1.2.0（当前 · Current）
+
+对局体验打磨：两步/双击落子、保存续弈与弃局、胜率走势曲线、实时分析整合。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+### 1.1.0
 
 首页重构与视觉统一 + 玩家进度体系。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
 
