@@ -222,6 +222,20 @@ class KataAnalyzeParser {
   }
 }
 
+/// 分析更新中最优非 pass 候选的胜率（无候选返回 null）。
+double? bestCandidateWinrate(AnalysisUpdate? update) {
+  if (update == null) return null;
+  for (final a in update.orderedMoves) {
+    if (a.move == 'pass') continue;
+    return a.winrate;
+  }
+  return null;
+}
+
+/// 把「行棋方视角」胜率换算为黑方视角（0..1）。
+double blackPerspectiveWinrate(double winrate, PlayerColor sideToMove) =>
+    sideToMove == PlayerColor.black ? winrate : 1 - winrate;
+
 /// 将 KataGo ownership（行主序、正值 = [toMove] 一方）转为
 /// 棋盘热力图约定：正值 = 黑方势力，负值 = 白方势力。
 List<List<double>> ownershipToInfluence(

@@ -132,3 +132,32 @@ class SuggestionPanel extends StatelessWidget {
   }
   return null;
 }
+
+/// 过滤出用于棋盘标注的推荐点（最多 [maxCount] 个、编号 1 起按推荐序）。
+///
+/// 取 `kata-analyze` 的 top 候选，跳过 pass/越界/非法着点，并以最优着法胜率为
+/// 基准：与最优胜率差超过 [maxWinrateGap]（默认 10%）的候选丢弃。
+List<MoveAnalysis> filterSuggestions(
+  AnalysisUpdate? update,
+  GoBoard board,
+  PlayerColor toMove, {
+  int maxCount = 4,
+  double maxWinrateGap = 0.10,
+}) {
+  if (update == null) return const [];
+  final ordered = update.orderedMoves;
+  double? best;
+  final out = <MoveAnalysis>[];
+  for (final a in ordered) {
+    if (out.length >= maxCount) break;
+    if (a.move == 'pass') continue;
+    final v = coordFromGtp(a.move);
+    if (v == null) continue;
+    final (r, c) = v;
+    if (!board.inBounds(r, c) || !board.isLegal(toMove, r, c)) continue;
+    final baseline = best ?? (best = a.winrate);
+    if (baseline - a.winrate > maxWinrateGap) continue;
+    out.add(a);
+  }
+  return out;
+}

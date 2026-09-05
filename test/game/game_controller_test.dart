@@ -5,6 +5,7 @@ import 'package:miaogo/core/move.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/game/game_controller.dart';
 import 'package:miaogo/game/move_provider.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -426,5 +427,99 @@ void main() {
     expect(s.aiError, isNull);
     expect(s.moves, hasLength(1));
     expect(s.isHumanTurn, isTrue);
+  });
+
+  test('保存对局：中断写入快照，续弈重建同局面', () async {
+    final container = await makeContainer(ai: _PassAi());
+    final notifier = container.read(gameControllerProvider.notifier);
+    notifier.startNewGame(
+      size: 9,
+      rule: GoRule.chinese,
+      komi: 7.5,
+      humanColor: PlayerColor.black,
+      difficulty: 8,
+    );
+    notifier.placeStone(0, 0);
+    await flush(); // AI 应手 PASS → 玩家回合，共 2 手
+    expect(container.read(gameControllerProvider).moves, hasLength(2));
+
+    await notifier.saveAndInterrupt();
+    final pending = container.read(pendingGameStoreProvider);
+    expect(pending, hasLength(1));
+    expect(pending.first.source, GameSource.ai);
+    expect(pending.first.difficulty, 8);
+    expect(pending.first.moves, hasLength(2));
+    // 状态仍进行中，不终局不计分不存谱
+    final s = container.read(gameControllerProvider);
+    expect(s.finished, isFalse);
+    expect(s.moves, hasLength(2));
+    expect(container.read(recordStoreProvider), isEmpty);
+
+    // 续弈：重建盘面/回合/连续 PASS 计数
+    await notifier.resumePending(pending.first);
+    final r = container.read(gameControllerProvider);
+    expect(r.finished, isFalse);
+    expect(r.moves, hasLength(2));
+    expect(r.board.at(0, 0), PlayerColor.black);
+    expect(r.turn, PlayerColor.black);
+    expect(r.consecutivePasses, 1);
+    expect(r.isHumanTurn, isTrue);
+  });
+
+  test('保存互斥：同槽位再次保存覆盖旧快照', () async {
+    final container = await makeContainer(ai: _PassAi());
+    final notifier = container.read(gameControllerProvider.notifier);
+    notifier.startNewGame(
+      size: 9,
+      rule: GoRule.chinese,
+      komi: 7.5,
+      humanColor: PlayerColor.black,
+      difficulty: 8,
+    );
+    notifier.placeStone(0, 0);
+    await flush();
+    await notifier.saveAndInterrupt();
+    expect(container.read(pendingGameStoreProvider), hasLength(1));
+
+    notifier.placeStone(1, 1);
+    await flush();
+    await notifier.saveAndInterrupt();
+    final pending = container.read(pendingGameStoreProvider);
+    expect(pending, hasLength(1));
+    expect(pending.first.moves, hasLength(4));
+  });
+
+  test('弃局：终局按「弃」存档、清除待续快照', () async {
+    final container = await makeContainer(ai: _PassAi());
+    final notifier = container.read(gameControllerProvider.notifier);
+    notifier.startNewGame(
+      size: 9,
+      rule: GoRule.chinese,
+      komi: 7.5,
+      humanColor: PlayerColor.black,
+      difficulty: 8,
+    );
+    notifier.placeStone(0, 0);
+    await flush();
+    expect(notifier.placeStone(1, 1), isTrue);
+    await flush();
+    expect(container.read(gameControllerProvider).moves, hasLength(4));
+    await notifier.saveAndInterrupt(); // 已有存档 → 弃局应清除
+    expect(container.read(pendingGameStoreProvider), hasLength(1));
+
+    notifier.abandon();
+    await flush(); // 记录异步落盘
+    final s = container.read(gameControllerProvider);
+    expect(s.finished, isTrue);
+    expect(s.resignedBy, PlayerColor.black);
+    expect(s.winner, PlayerColor.white);
+    expect(s.result, isNull);
+    // 存档已清除，本局不可再续
+    expect(container.read(pendingGameStoreProvider), isEmpty);
+
+    final records = container.read(recordStoreProvider);
+    expect(records, hasLength(1));
+    expect(records.first.result, GameResult.abandoned);
+    expect(records.first.result.label, '弃');
   });
 }

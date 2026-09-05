@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/core/rank.dart';
-import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/game/career_controller.dart';
 import 'package:miaogo/storage/checkin_store.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:miaogo/ui/common/avatar.dart';
+import 'package:miaogo/ui/common/slide_route.dart';
+import 'package:miaogo/ui/settings/edit_name_page.dart';
+import 'package:miaogo/ui/settings/settings_common.dart';
+import 'package:miaogo/ui/settings/settings_selection_page.dart';
 
-/// 设置页：名称/头像 / 棋盘大小 / 对弈规则 / 贴目 / 音效 / 恢复默认 / 关于 / 重生棋手。
+/// 设置页：用户 / 对弈（棋盘大小、对弈规则）/ 通用（音效、恢复默认、关于喵棋）。
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -19,109 +23,93 @@ class SettingsPage extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final profile = ref.watch(userProfileProvider);
     final theme = Theme.of(context);
+    final board = settings.boardSize;
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: settingsAppBar(context, '设置'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _SectionLabel('用户'),
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: ListTile(
-              leading: InkWell(
-                key: const ValueKey('settings_avatar'),
-                customBorder: const CircleBorder(),
-                onTap: () => showAvatarChangeDialog(context, ref),
-                child: AvatarView(
-                  avatarPath: profile.avatarPath,
-                  name: profile.name,
-                  radius: 22,
-                ),
+          _SettingsTile(
+            leading: InkWell(
+              key: const ValueKey('settings_avatar'),
+              customBorder: const CircleBorder(),
+              onTap: () => showAvatarChangeDialog(context, ref),
+              child: AvatarView(
+                avatarPath: profile.avatarPath,
+                name: profile.name,
+                radius: 22,
               ),
-              title: Text(profile.name),
-              subtitle: Text(
-                '${RankSystem.rankName(profile.rankIndex)} · '
-                '${profile.careerPoints} 分 · ${profile.totalGames} 局',
-              ),
-              trailing: const Icon(Icons.edit),
-              onTap: () => _editName(context, ref),
+            ),
+            title: Text(
+              profile.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '${RankSystem.rankName(profile.rankIndex)} · '
+              '${profile.careerPoints} 分 · ${profile.totalGames} 局',
+            ),
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              slideRightRoute<void>(const EditNamePage()),
             ),
           ),
           const SizedBox(height: 16),
           _SectionLabel('对弈'),
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('棋盘大小', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  SegmentedButton<BoardSize>(
-                    segments: const [
-                      ButtonSegment(value: BoardSize.nine, label: Text('9 路')),
-                      ButtonSegment(
-                          value: BoardSize.thirteen, label: Text('13 路')),
-                      ButtonSegment(
-                          value: BoardSize.nineteen, label: Text('19 路')),
-                    ],
-                    selected: {settings.boardSize},
-                    onSelectionChanged: (s) => ref
-                        .read(settingsProvider.notifier)
-                        .setBoardSize(s.first),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('对弈规则', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  SegmentedButton<GoRule>(
-                    segments: [
-                      for (final rule in GoRule.values)
-                        ButtonSegment(value: rule, label: Text(rule.label)),
-                    ],
-                    selected: {settings.rule},
-                    onSelectionChanged: (s) =>
-                        ref.read(settingsProvider.notifier).setRule(s.first),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '贴目：${settings.komi}（随规则联动）',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
+          _SettingsTile(
+            title: const Text('棋盘大小'),
+            subtitle: Text('${board.size} 路 · ${board.size} × ${board.size}'),
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              slideRightRoute<void>(const BoardSizePage()),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SettingsTile(
+            title: const Text('对弈规则'),
+            subtitle: Text('${settings.rule.label} · 贴目 ${_fmtKomi(settings.komi)}'),
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              slideRightRoute<void>(const RulePage()),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SettingsTile(
+            title: const Text('落子方式'),
+            subtitle: Text(settings.moveStyle.label),
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              slideRightRoute<void>(const MoveStylePage()),
             ),
           ),
           const SizedBox(height: 16),
           _SectionLabel('通用'),
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('音效'),
-                  value: settings.soundEnabled,
-                  onChanged: (v) => ref
-                      .read(settingsProvider.notifier)
-                      .setSoundEnabled(v),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('恢复默认设置'),
-                  trailing: const Icon(Icons.restart_alt),
-                  onTap: () => _confirmReset(context, ref),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('关于喵棋'),
-                  trailing: const Icon(Icons.info_outline),
-                  onTap: () => _showAbout(context),
-                ),
-              ],
+          _SettingsTile(
+            title: const Text('音效'),
+            subtitle: Text(settings.soundEnabled ? '开' : '关'),
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              slideRightRoute<void>(const SoundPage()),
             ),
+          ),
+          const SizedBox(height: 10),
+          _SettingsTile(
+            title: const Text('恢复默认设置'),
+            trailing: Icon(
+              Icons.restart_alt,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            onTap: () => _confirmReset(context, ref),
+          ),
+          const SizedBox(height: 10),
+          _SettingsTile(
+            title: const Text('关于喵棋'),
+            trailing: Icon(
+              Icons.info_outline,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            onTap: () => _showAbout(context),
           ),
           const SizedBox(height: 24),
           Center(
@@ -141,36 +129,6 @@ class SettingsPage extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _editName(BuildContext context, WidgetRef ref) async {
-    final controller =
-        TextEditingController(text: ref.read(userProfileProvider).name);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('修改名称'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 12,
-          decoration: const InputDecoration(labelText: '名称'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (name != null) {
-      ref.read(userProfileProvider.notifier).updateName(name);
-    }
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
@@ -195,6 +153,7 @@ class SettingsPage extends ConsumerWidget {
       ref.read(settingsProvider.notifier).reset();
       ref.read(userProfileProvider.notifier).reset();
       ref.read(careerControllerProvider.notifier).reset();
+      ref.read(pendingGameStoreProvider.notifier).clear();
     }
   }
 
@@ -223,16 +182,83 @@ class SettingsPage extends ConsumerWidget {
       ref.read(recordStoreProvider.notifier).clear();
       ref.read(checkinStoreProvider.notifier).reset();
       ref.read(problemStoreProvider.notifier).reset();
+      ref.read(pendingGameStoreProvider.notifier).clear();
     }
   }
 
   void _showAbout(BuildContext context) {
-    showAboutDialog(
+    showDialog<void>(
       context: context,
-      applicationName: '喵棋 MiaoGo',
-      applicationVersion: '1.1.0',
-      applicationIcon: const Icon(Icons.grid_on, size: 40),
-      children: const [Text('本地 KataGo 引擎驱动的围棋对弈与学习应用。')],
+      builder: (ctx) => AlertDialog(
+        icon: Image.asset(
+          'assets/icon/app_icon_fg.png',
+          width: 72,
+          height: 72,
+          fit: BoxFit.contain,
+        ),
+        title: const Text('喵棋 MiaoGo'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('版本 1.2.0'),
+            SizedBox(height: 8),
+            Text('本地 KataGo 引擎驱动的围棋对弈与学习应用。'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 设置页通用卡片项：暖米色卡 + ListTile 结构，模仿「用户卡片」。
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.chevron = false,
+    this.onTap,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? leading;
+
+  /// 自定义右侧控件；与 [chevron] 互斥（[chevron] 优先）。
+  final Widget? trailing;
+
+  /// 是否显示右侧箭头。
+  final bool chevron;
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        trailing: chevron
+            ? Icon(Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant)
+            : trailing,
+        onTap: onTap,
+      ),
     );
   }
 }
@@ -255,4 +281,10 @@ class _SectionLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 贴目展示：整数省略小数点（如 7.5 / 6），避免出现 6.0 之类。
+String _fmtKomi(double komi) {
+  if (komi == komi.roundToDouble()) return '${komi.toInt()}';
+  return '$komi';
 }

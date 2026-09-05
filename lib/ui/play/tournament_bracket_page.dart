@@ -8,7 +8,9 @@ import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/career_controller.dart';
 import 'package:miaogo/game/game_controller.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/record_store.dart';
+import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/ui/common/rank_badge.dart';
 import 'package:miaogo/ui/play/game_page.dart';
 
@@ -51,17 +53,29 @@ class _TournamentBracketPageState
       return;
     }
 
+    // 该场有待续快照（保存过且未结束）则续弈；否则从零开新局。
+    final pendingList = ref.read(pendingGameStoreProvider);
+    PendingGame? pending;
+    for (final p in pendingList) {
+      if (p.source == GameSource.career && p.tournamentId == tournament.id) {
+        pending = p;
+        break;
+      }
+    }
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => GamePage(
-        size: tournament.boardSize,
-        rule: tournament.rule,
-        komi: tournament.komi,
-        humanColor: PlayerColor.black,
-        difficulty: opponent.rankIndex,
-        opponentName: opponent.name,
-        source: GameSource.career,
-        tournamentId: tournament.id,
-      ),
+      builder: (_) => pending != null
+          ? GamePage.resume(pending: pending)
+          : GamePage(
+              size: tournament.boardSize,
+              rule: tournament.rule,
+              komi: tournament.komi,
+              humanColor: PlayerColor.black,
+              difficulty: opponent.rankIndex,
+              opponentName: opponent.name,
+              source: GameSource.career,
+              tournamentId: tournament.id,
+              moveStyle: ref.read(settingsProvider).moveStyle,
+            ),
     ));
     if (!mounted) return;
     final game = ref.read(gameControllerProvider);

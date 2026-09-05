@@ -37,6 +37,11 @@ class KataGoMoveProvider implements MoveProvider {
 
   final math.Random _random;
 
+  /// 每次 AI 搜索完成后的回调（侧别 = 行棋方 + 其视角胜率 0..1）。
+  ///
+  /// 胜率曲线复用对局中的既有搜索，无需额外评估 AI 回合那手。
+  void Function(PlayerColor sideToMove, double winrate)? winrateListener;
+
   /// 当前规则上下文（对局中切换规则时由外部调用 [updateRule] 同步）。
   GoRule _rule;
   double _komi;
@@ -79,6 +84,10 @@ class KataGoMoveProvider implements MoveProvider {
       difficulty: diff,
       ownership: false,
     );
+    final winrate = bestCandidateWinrate(result.update);
+    if (winrate != null) {
+      winrateListener?.call(toMove, winrate);
+    }
     return _sampleMove(
       board: board,
       toMove: toMove,

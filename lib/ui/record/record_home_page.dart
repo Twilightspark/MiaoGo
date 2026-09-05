@@ -112,6 +112,7 @@ class _RecordCard extends StatelessWidget {
       GameResult.win => GoColors.pine,
       GameResult.loss => GoColors.textSecondary,
       GameResult.draw => GoColors.wood,
+      GameResult.abandoned => GoColors.textSecondary,
     };
     final date = record.date;
     final dateText =

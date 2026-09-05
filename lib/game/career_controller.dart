@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/game/career.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
+import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 
@@ -113,6 +116,10 @@ class CareerController extends Notifier<CareerState> {
     if (active == null) return;
     final size = active.boardSize;
     final user = ref.read(userProfileProvider);
+    // 退赛即作废进行中对局：清除该赛事的待续快照。
+    unawaited(ref
+        .read(pendingGameStoreProvider.notifier)
+        .removeFor(source: GameSource.career, tournamentId: active.id));
     final record = CareerResult(
       id: '${DateTime.now().millisecondsSinceEpoch}',
       tournamentName: active.name,

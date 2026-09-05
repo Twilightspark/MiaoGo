@@ -10,7 +10,9 @@ import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/game/match_engine.dart';
 import 'package:miaogo/game/move_provider.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/record_store.dart';
+import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 
 /// 对局状态（不可变快照 + 可变 [board]；棋谱重放/悔棋时重建棋盘）。
@@ -178,6 +180,12 @@ class GameController extends Notifier<GameState> {
   /// 本局主动点目申请被拒绝的次数（≥3 后不再申请）。
   int _scoreRefusals = 0;
 
+  /// 本局是否以「弃局」收尾（历史记录显示「弃」，不结算胜负）。
+  bool _abandoned = false;
+
+  /// 本局落子方式（双击 / 确认），随存档快照持久化。
+  MoveStyle _moveStyle = MoveStyle.confirm;
+
   /// 当前 AI：测试注入优先，否则引擎；两者皆无抛错（生产由引擎门槛保证）。
   MoveProvider get _currentAi {
     final explicit = _explicitAi;
@@ -212,12 +220,20 @@ class GameController extends Notifier<GameState> {
     String? opponentName,
     GameSource source = GameSource.ai,
     String? tournamentId,
+    MoveStyle moveStyle = MoveStyle.confirm,
   }) {
     _session++;
     _scoreRefusals = 0;
+    _abandoned = false;
     _opponentName = opponentName ?? '';
+    _moveStyle = moveStyle;
     _source = source;
     _tournamentId = tournamentId;
+    // 全新一局：清掉同槽位遗留的待续快照，并按本局规则同步引擎上下文。
+    unawaited(ref
+        .read(pendingGameStoreProvider.notifier)
+        .removeFor(source: source, tournamentId: tournamentId));
+    unawaited(_syncRuleContext(rule, komi));
     state = GameState(
       boardSize: size,
       rule: rule,
@@ -238,6 +254,115 @@ class GameController extends Notifier<GameState> {
       aiError: null,
     );
     if (state.aiColor == PlayerColor.black) _scheduleAi();
+  }
+
+  /// 从中断保存的快照续弈：重放棋步重建盘面，轮到 AI 则排程。
+  ///
+  /// 续弈前同步引擎规则/贴目，保证后续行棋与存档一致。
+  Future<void> resumePending(PendingGame pending) async {
+    final moves = pending.moves;
+    _session++;
+    _scoreRefusals = 0;
+    _abandoned = false;
+    _opponentName = pending.opponentName;
+    _moveStyle = pending.moveStyle;
+    _source = pending.source;
+    _tournamentId = pending.tournamentId;
+    await _syncRuleContext(pending.rule, pending.komi);
+    final board = GoBoard(size: pending.size);
+    final applied = <Move>[];
+    for (final m in moves) {
+      if (m.isPass) {
+        applied.add(m);
+        continue;
+      }
+      if (board.play(m.color, m.row!, m.col!)) applied.add(m);
+    }
+    var consecutivePasses = 0;
+    for (final m in applied.reversed) {
+      if (!m.isPass) break;
+      consecutivePasses++;
+    }
+    final toMove =
+        applied.isEmpty ? PlayerColor.black : applied.last.color.opposite;
+    state = GameState(
+      boardSize: pending.size,
+      rule: pending.rule,
+      komi: pending.komi,
+      humanColor: pending.humanColor,
+      aiColor: pending.humanColor.opposite,
+      difficulty: pending.difficulty,
+      board: board,
+      moves: applied,
+      turn: toMove,
+      aiThinking: false,
+      finished: false,
+      result: null,
+      winner: null,
+      resignedBy: null,
+      consecutivePasses: consecutivePasses,
+      suggestScoring: false,
+      aiError: null,
+    );
+    if (state.turn == state.aiColor) _scheduleAi();
+  }
+
+  /// 中断并保存本局（不终局不计分）：供「保存对局」按钮调用。
+  ///
+  /// 递增会话号使进行中的 AI 思考作废（返回首页后不会误落子），
+  /// 并把当前局面连同对局参数写入 [PendingGameStore]。
+  /// [winrateHistory] 为已采集的 (手数, 黑方胜率)，续弈后延续曲线。
+  Future<void> saveAndInterrupt({
+    List<(int, double)> winrateHistory = const [],
+  }) async {
+    final s = state;
+    if (s.finished || s.moves.isEmpty) return;
+    _session++;
+    final content = Sgf.build(
+      size: s.boardSize,
+      rules: s.rule.name,
+      komi: s.komi,
+      moves: s.moves,
+    );
+    await ref.read(pendingGameStoreProvider.notifier).save(PendingGame(
+          source: _source,
+          size: s.boardSize,
+          rule: s.rule,
+          komi: s.komi,
+          humanColor: s.humanColor,
+          difficulty: s.difficulty,
+          opponentName: _opponentName,
+          tournamentId: _tournamentId,
+          moveStyle: _moveStyle,
+          winrateHistory: winrateHistory,
+          sgf: content,
+          savedAt: DateTime.now(),
+        ));
+  }
+
+  /// 弃局：按「负」收尾但不显示胜负，历史记录「弃」，同时清除本局存档。
+  void abandon() {
+    final s = state;
+    if (s.finished) return;
+    _session++;
+    _abandoned = true;
+    state = s.copyWith(
+      finished: true,
+      aiThinking: false,
+      result: null,
+      winner: s.aiColor,
+      resignedBy: s.humanColor,
+      suggestScoring: false,
+    );
+    unawaited(_saveRecord(winner: s.aiColor, result: null));
+  }
+
+  /// 引擎版选点器的规则/贴目上下文与本局同步（对局中切换规则同源逻辑）。
+  Future<void> _syncRuleContext(GoRule rule, double komi) async {
+    final engineAi = ref.read(kataGoMoveProvider);
+    if (engineAi is KataGoMoveProvider) {
+      await engineAi.updateRule(rule, komi);
+    }
   }
 
   /// 玩家落子；成功返回 true 并调度 AI。
@@ -453,20 +578,25 @@ class GameController extends Notifier<GameState> {
         : 'AI · ${RankSystem.rankName(s.difficulty)}';
     final winnerColor = result?.winner ?? s.winner;
     final isDraw = result != null && result.winner == null;
-    final re = isDraw
-        ? 'Draw'
-        : '${winnerColor == PlayerColor.black ? 'B' : 'W'}'
-            '+${result?.margin ?? 'R'}';
+    final re = _abandoned
+        ? ''
+        : (isDraw
+            ? 'Draw'
+            : '${winnerColor == PlayerColor.black ? 'B' : 'W'}'
+                '+${result?.margin ?? 'R'}');
+    final outcome = _abandoned
+        ? GameResult.abandoned
+        : (isDraw
+            ? GameResult.draw
+            : (winnerColor == s.humanColor
+                ? GameResult.win
+                : GameResult.loss));
     final record = GameRecord(
       id: '${DateTime.now().millisecondsSinceEpoch}',
       date: DateTime.now(),
       opponentName: aiName,
       opponentRank: s.difficulty,
-      result: isDraw
-          ? GameResult.draw
-          : (winnerColor == s.humanColor
-              ? GameResult.win
-              : GameResult.loss),
+      result: outcome,
       boardSize: s.boardSize,
       rule: s.rule,
       komi: s.komi,
@@ -485,6 +615,10 @@ class GameController extends Notifier<GameState> {
       ),
     );
     await ref.read(recordStoreProvider.notifier).add(record);
+    // 终局/弃局后该局不再可续：清除同槽位存档。
+    await ref
+        .read(pendingGameStoreProvider.notifier)
+        .removeFor(source: _source, tournamentId: _tournamentId);
   }
 }
 

@@ -132,15 +132,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home_settings')));
     await tester.pumpAndSettle();
 
-    // 改名便于校验重生重置
+    // 改名便于校验重生重置：设置列表变高后，用户卡为页首首个 ListTile
     await tester.tap(find.byType(ListTile).first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '喵棋大师');
-    await tester.tap(find.text('保存'));
+    await tester.tap(find.byKey(const ValueKey('edit_name_save')));
     await tester.pumpAndSettle();
     expect(find.text('喵棋大师'), findsWidgets);
 
-    // 重生：二次确认后初始化全部进度
+    // 重生：滚动到底部按钮后二次确认初始化全部进度
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings_rebirth')),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('settings_rebirth')));
     await tester.pumpAndSettle();
     expect(
@@ -148,6 +154,12 @@ void main() {
             '重生将初始化棋手信息与全部进度（名称、段位、积分、对局记录、赛事、打卡与做题进度），确定继续？'),
         findsOneWidget);
     await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings_avatar')),
+      -100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     expect(find.text('喵棋大师'), findsNothing);
     expect(find.text('棋手'), findsWidgets);

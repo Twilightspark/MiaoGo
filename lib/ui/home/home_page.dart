@@ -4,9 +4,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/sgf.dart';
+import 'package:miaogo/engine/engine_controller.dart';
+import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/career_controller.dart';
 import 'package:miaogo/storage/checkin_store.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:miaogo/study/daily_problems.dart';
@@ -14,6 +17,7 @@ import 'package:miaogo/ui/common/app_icon.dart';
 import 'package:miaogo/ui/common/avatar.dart';
 import 'package:miaogo/ui/home/daily_session_page.dart';
 import 'package:miaogo/ui/play/ai_setup_page.dart';
+import 'package:miaogo/ui/play/game_page.dart';
 import 'package:miaogo/ui/play/tournament_bracket_page.dart';
 import 'package:miaogo/ui/record/record_home_page.dart';
 import 'package:miaogo/ui/record/review_page.dart';
@@ -34,6 +38,11 @@ class HomePage extends ConsumerWidget {
     final career = ref.watch(careerControllerProvider);
     final checkin = ref.watch(checkinStoreProvider);
     final daily = ref.watch(todayDailyProgressProvider);
+    final pendingGames = ref.watch(pendingGameStoreProvider);
+    final quickPending = _pendingQuick(pendingGames);
+    final careerPending = career.active == null
+        ? null
+        : _pendingCareer(pendingGames, career.active!.id);
 
     // 今日 5 题全部解出 → 记录打卡（幂等）。
     ref.listen<({int solved, int total})>(todayDailyProgressProvider,
@@ -74,11 +83,19 @@ class HomePage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 14),
                           _QuickPlayCard(
-                            onStart: () => _push(context, const AISetupPage()),
+                            resumable: quickPending != null,
+                            onStart: () =>
+                                _push(context, const AISetupPage()),
+                            onContinue: () {
+                              final p = quickPending;
+                              if (p == null) return;
+                              _resumeQuick(context, ref, p);
+                            },
                           ),
                           const SizedBox(height: 14),
                           _CurrentTournamentCard(
                             career: career,
+                            resumable: careerPending != null,
                             onContinue: () => _push(
                                 context, const TournamentBracketPage()),
                             onSignUp: () => _showSignUpDialog(context, ref),
@@ -110,6 +127,27 @@ class HomePage extends ConsumerWidget {
 
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  /// 对手段位对应的引擎模型（级位小模型 / 段位大模型）是否就绪。
+  bool _engineReadyFor(WidgetRef ref, int difficulty) {
+    final isDan = difficulty >= RankSystem.kNumKyuRanks;
+    return isDan
+        ? ref.read(danEngineStatusProvider) == EngineStatus.ready
+        : ref.read(engineStatusProvider) == EngineStatus.ready;
+  }
+
+  /// 首页「快速对弈 → 继续」：跳过匹配设置，直接从存档续弈。
+  void _resumeQuick(BuildContext context, WidgetRef ref, PendingGame pending) {
+    if (!_engineReadyFor(ref, pending.difficulty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('引擎未就绪，请稍后再试')),
+      );
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GamePage.resume(pending: pending),
+    ));
   }
 
   void _showSignUpDialog(BuildContext context, WidgetRef ref) {
@@ -354,11 +392,17 @@ class _DailyProblemCard extends StatelessWidget {
   }
 }
 
-/// 快速对弈卡：左侧标题 + 右侧开始按钮。
+/// 快速对弈卡：左侧标题 + 右侧按钮（有未完成对局时变为「继续」续弈）。
 class _QuickPlayCard extends StatelessWidget {
-  const _QuickPlayCard({required this.onStart});
+  const _QuickPlayCard({
+    required this.resumable,
+    required this.onStart,
+    required this.onContinue,
+  });
 
+  final bool resumable;
   final VoidCallback onStart;
+  final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -366,26 +410,29 @@ class _QuickPlayCard extends StatelessWidget {
       asset: AppIcon.play,
       color: GoColors.pineDark,
       title: '快速对弈',
-      subtitle: '人机对弈 · 随时开局',
+      subtitle: resumable ? '有未完成对局，点击继续' : '人机对弈 · 随时开局',
       button: FilledButton.icon(
         key: const ValueKey('home_quick_play_button'),
-        onPressed: onStart,
+        onPressed: resumable ? onContinue : onStart,
         icon: const Icon(Icons.play_arrow, size: 18),
-        label: const Text('开始'),
+        label: Text(resumable ? '继续' : '开始'),
       ),
     );
   }
 }
 
 /// 当前赛事卡：已报名展示赛事信息+继续比赛；未报名展示提示+去报名。
+/// 有该赛事待续快照时按钮文案为「继续」（仍进入赛程页续弈）。
 class _CurrentTournamentCard extends StatelessWidget {
   const _CurrentTournamentCard({
     required this.career,
+    required this.resumable,
     required this.onContinue,
     required this.onSignUp,
   });
 
   final CareerState career;
+  final bool resumable;
   final VoidCallback onContinue;
   final VoidCallback onSignUp;
 
@@ -416,7 +463,7 @@ class _CurrentTournamentCard extends StatelessWidget {
         key: const ValueKey('home_tournament_continue'),
         onPressed: onContinue,
         icon: const Icon(Icons.play_arrow, size: 18),
-        label: const Text('比赛'),
+        label: Text(resumable ? '继续' : '比赛'),
       ),
     );
   }
@@ -624,6 +671,7 @@ class _GameHistoryCard extends ConsumerWidget {
       GameResult.win => GoColors.pine,
       GameResult.loss => GoColors.textSecondary,
       GameResult.draw => GoColors.wood,
+      GameResult.abandoned => GoColors.textSecondary,
     };
     return Card(
       elevation: 0,
@@ -863,4 +911,22 @@ class _SectionLabel extends StatelessWidget {
 String _fmtShortDate(DateTime d) =>
     '${d.month.toString().padLeft(2, '0')}-'
     '${d.day.toString().padLeft(2, '0')}';
+
+/// 快速对弈的待续快照（无则 null）。
+PendingGame? _pendingQuick(List<PendingGame> list) {
+  for (final p in list) {
+    if (p.source == GameSource.ai) return p;
+  }
+  return null;
+}
+
+/// 指定赛事的待续快照（无则 null）。
+PendingGame? _pendingCareer(List<PendingGame> list, String tournamentId) {
+  for (final p in list) {
+    if (p.source == GameSource.career && p.tournamentId == tournamentId) {
+      return p;
+    }
+  }
+  return null;
+}
 

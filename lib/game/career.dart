@@ -410,6 +410,12 @@ class CareerNames {
     return '${pool.$1[random.nextInt(pool.$1.length)]}'
         '${pool.$2[random.nextInt(pool.$2.length)]}';
   }
+
+  /// 随机国籍下随机生成一位 AI 对手名（竞赛命名同源，人机对局复用）。
+  static String aiPlayerName(math.Random random) {
+    final nat = Nationality.values[random.nextInt(Nationality.values.length)];
+    return playerName(nat, random);
+  }
 }
 
 /// 名次 → 文本（0 退赛）。

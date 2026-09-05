@@ -20,7 +20,8 @@ enum GameSource {
 enum GameResult {
   win('胜'),
   loss('负'),
-  draw('和');
+  draw('和'),
+  abandoned('弃');
 
   const GameResult(this.label);
   final String label;

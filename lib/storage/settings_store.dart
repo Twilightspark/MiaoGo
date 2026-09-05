@@ -14,7 +14,16 @@ enum BoardSize {
   final int size;
 }
 
-/// 应用设置：棋盘/棋子风格、棋盘大小、对弈规则、贴目、音效。
+/// 落子方式：双击落子（双击棋盘同一点落子） / 确认落子（选点后点落子按钮）。
+enum MoveStyle {
+  doubleTap('双击落子'),
+  confirm('确认落子');
+
+  const MoveStyle(this.label);
+  final String label;
+}
+
+/// 应用设置：棋盘/棋子风格、棋盘大小、对弈规则、贴目、音效、落子方式。
 class AppSettings {
   const AppSettings({
     required this.boardStyle,
@@ -23,6 +32,7 @@ class AppSettings {
     required this.rule,
     required this.komi,
     required this.soundEnabled,
+    required this.moveStyle,
   });
 
   factory AppSettings.defaults() => AppSettings(
@@ -32,6 +42,7 @@ class AppSettings {
         rule: GoRule.chinese,
         komi: GoRule.chinese.defaultKomi,
         soundEnabled: true,
+        moveStyle: MoveStyle.confirm,
       );
 
   final String boardStyle;
@@ -40,6 +51,7 @@ class AppSettings {
   final GoRule rule;
   final double komi;
   final bool soundEnabled;
+  final MoveStyle moveStyle;
 
   AppSettings copyWith({
     String? boardStyle,
@@ -48,6 +60,7 @@ class AppSettings {
     GoRule? rule,
     double? komi,
     bool? soundEnabled,
+    MoveStyle? moveStyle,
   }) {
     return AppSettings(
       boardStyle: boardStyle ?? this.boardStyle,
@@ -56,6 +69,7 @@ class AppSettings {
       rule: rule ?? this.rule,
       komi: komi ?? this.komi,
       soundEnabled: soundEnabled ?? this.soundEnabled,
+      moveStyle: moveStyle ?? this.moveStyle,
     );
   }
 
@@ -66,6 +80,7 @@ class AppSettings {
         'rule': rule.name,
         'komi': komi,
         'soundEnabled': soundEnabled,
+        'moveStyle': moveStyle.name,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -80,6 +95,8 @@ class AppSettings {
       komi: (json['komi'] as num?)?.toDouble() ??
           GoRule.chinese.defaultKomi,
       soundEnabled: json['soundEnabled'] as bool? ?? true,
+      moveStyle: MoveStyle.values.firstWhere((e) => e.name == json['moveStyle'],
+          orElse: () => MoveStyle.confirm),
     );
   }
 }
@@ -121,6 +138,10 @@ class SettingsStore extends Notifier<AppSettings> {
 
   void setSoundEnabled(bool enabled) =>
       _persist(state.copyWith(soundEnabled: enabled));
+
+  /// 切换落子方式（双击 / 确认）。
+  void setMoveStyle(MoveStyle style) =>
+      _persist(state.copyWith(moveStyle: style));
 
   void reset() => _persist(AppSettings.defaults());
 }

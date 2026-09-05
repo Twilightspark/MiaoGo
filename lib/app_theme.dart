@@ -32,6 +32,12 @@ abstract final class GoColors {
   /// 浅木色：积分等浅色底。
   static const Color woodContainer = Color(0xFFF0E0CE);
 
+  /// 深木色（老虎机机身等重色块）。
+  static const Color woodDeep = Color(0xFF5C3A1E);
+
+  /// 木色高光（机身描边高光等）。
+  static const Color woodHighlight = Color(0xFFB97B43);
+
   /// 一级文字。
   static const Color textPrimary = Color(0xFF2B2926);
 

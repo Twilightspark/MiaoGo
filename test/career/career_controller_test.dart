@@ -1,7 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:miaogo/core/move.dart';
+import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/career_controller.dart';
+import 'package:miaogo/storage/pending_game_store.dart';
+import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -189,5 +193,34 @@ void main() {
     expect(user.careerPoints, 90);
     expect(user.rankIndex, 0); // 90 < 100，未升级
     expect(user.participations, 1);
+  });
+
+  test('退赛清除该赛事的待续快照', () async {
+    final c = await makeContainer();
+    final notifier = c.read(careerControllerProvider.notifier);
+    final t = c
+        .read(careerControllerProvider)
+        .upcoming
+        .firstWhere((t) => t.boardSize == 9);
+    notifier.signUp(t.id);
+    final activeId = c.read(careerControllerProvider).active!.id;
+
+    // 模拟：赛事进行中对局保存为待续快照。
+    await c.read(pendingGameStoreProvider.notifier).save(PendingGame(
+          source: GameSource.career,
+          size: 9,
+          rule: GoRule.chinese,
+          komi: 7.5,
+          humanColor: PlayerColor.black,
+          difficulty: 8,
+          opponentName: '',
+          tournamentId: activeId,
+          sgf: '(;SZ[9]RU[chinese]KM[7.5];B[ee])',
+          savedAt: DateTime.now(),
+        ));
+    expect(c.read(pendingGameStoreProvider), hasLength(1));
+
+    notifier.withdraw();
+    expect(c.read(pendingGameStoreProvider), isEmpty);
   });
 }

@@ -135,6 +135,7 @@ void main() {
       expect(settings.rule, GoRule.chinese);
       expect(settings.komi, 7.5);
       expect(settings.soundEnabled, isTrue);
+      expect(settings.moveStyle, MoveStyle.confirm);
     });
 
     test('切换规则联动贴目', () async {
@@ -151,14 +152,22 @@ void main() {
       expect(container.read(settingsProvider).boardSize, BoardSize.nineteen);
     });
 
+    test('设置落子方式', () async {
+      final container = await makeContainer();
+      container.read(settingsProvider.notifier).setMoveStyle(MoveStyle.doubleTap);
+      expect(container.read(settingsProvider).moveStyle, MoveStyle.doubleTap);
+    });
+
     test('恢复默认', () async {
       final container = await makeContainer();
       final notifier = container.read(settingsProvider.notifier);
       notifier.setRule(GoRule.korean);
       notifier.setBoardSize(BoardSize.thirteen);
+      notifier.setMoveStyle(MoveStyle.doubleTap);
       notifier.reset();
       expect(container.read(settingsProvider).rule, GoRule.chinese);
       expect(container.read(settingsProvider).boardSize, BoardSize.nine);
+      expect(container.read(settingsProvider).moveStyle, MoveStyle.confirm);
     });
 
     test('持久化往返', () async {
@@ -167,6 +176,7 @@ void main() {
       final c1 = ProviderContainer(
           overrides: [sharedPreferencesProvider.overrideWithValue(prefs)]);
       c1.read(settingsProvider.notifier).setRule(GoRule.korean);
+      c1.read(settingsProvider.notifier).setMoveStyle(MoveStyle.doubleTap);
       c1.dispose();
 
       final c2 = ProviderContainer(
@@ -175,6 +185,7 @@ void main() {
       final restored = c2.read(settingsProvider);
       expect(restored.rule, GoRule.korean);
       expect(restored.komi, 6.5);
+      expect(restored.moveStyle, MoveStyle.doubleTap);
     });
   });
 }

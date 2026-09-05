@@ -5,16 +5,34 @@ import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/board.dart';
 import 'package:miaogo/core/move.dart';
 
+/// 一个棋盘推荐点标注：编号圆点（[isBest] 时用主色，其余用木色）。
+class BoardSuggestionMark {
+  const BoardSuggestionMark({
+    required this.row,
+    required this.col,
+    required this.number,
+    required this.isBest,
+  });
+
+  final int row;
+  final int col;
+
+  /// 显示序号（1 = 最推荐）。
+  final int number;
+  final bool isBest;
+}
+
 /// 棋盘组件：CustomPainter 绘制木色棋盘/网格/星位/坐标/棋子。
 ///
 /// 交互为两步落子：点击/拖拽选点（[onPointTapped]/[onPointDrag]），
-/// 由外部确认后落子；支持落子标记、AI 建议标记与势力范围热力图覆盖。
+/// 由外部确认后落子；支持落子标记、AI 建议标注与势力范围热力图覆盖。
 class GoBoardWidget extends StatelessWidget {
   const GoBoardWidget({
     super.key,
     required this.board,
     this.lastMove,
     this.hint,
+    this.suggestions,
     this.selected,
     this.selectedColor = PlayerColor.black,
     this.influence,
@@ -28,6 +46,9 @@ class GoBoardWidget extends StatelessWidget {
 
   /// AI 建议的下一步交叉点（松柏青标注）。
   final (int, int)? hint;
+
+  /// AI 建议候选点（最多 4 个，编号标注，最佳与其余异色）。
+  final List<BoardSuggestionMark>? suggestions;
 
   /// 当前选中的交叉点（两步落子第一步）。
   final (int, int)? selected;
@@ -76,6 +97,7 @@ class GoBoardWidget extends StatelessWidget {
               board: board,
               lastMove: lastMove,
               hint: hint,
+              suggestions: suggestions,
               selected: selected,
               selectedColor: selectedColor,
               influence: influence,
@@ -116,6 +138,7 @@ class _BoardPainter extends CustomPainter {
     required this.board,
     required this.lastMove,
     required this.hint,
+    required this.suggestions,
     required this.selected,
     required this.selectedColor,
     required this.influence,
@@ -125,6 +148,7 @@ class _BoardPainter extends CustomPainter {
   final GoBoard board;
   final Move? lastMove;
   final (int, int)? hint;
+  final List<BoardSuggestionMark>? suggestions;
   final (int, int)? selected;
   final PlayerColor selectedColor;
   final List<List<double>>? influence;
@@ -244,6 +268,52 @@ class _BoardPainter extends CustomPainter {
       );
     }
 
+    // 推荐点编号标注（最多 4 个；最佳主色、其余木色）
+    final marks = suggestions;
+    if (marks != null && marks.isNotEmpty) {
+      for (final mark in marks) {
+        final center = Offset(
+          margin + mark.col * cell,
+          margin + mark.row * cell,
+        );
+        final radius = cell * 0.24;
+        canvas.drawCircle(
+          center.translate(0, radius * 0.1),
+          radius,
+          Paint()..color = Colors.black.withValues(alpha: 0.15),
+        );
+        canvas.drawCircle(
+          center,
+          radius,
+          Paint()
+            ..color = mark.isBest ? GoColors.pine : GoColors.woodDark,
+        );
+        canvas.drawCircle(
+          center,
+          radius,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = math.max(1, cell * 0.03)
+            ..color = Colors.white.withValues(alpha: 0.55),
+        );
+        final label = TextPainter(
+          text: TextSpan(
+            text: '${mark.number}',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: radius * 1.1,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        label.paint(
+          canvas,
+          Offset(center.dx - label.width / 2, center.dy - label.height / 2),
+        );
+      }
+    }
+
     // 坐标：左侧数字 + 底部字母（SGF a..t 跳过 i）
     _drawCoordinates(canvas, margin, cell, n, boardEdge);
   }
@@ -335,6 +405,7 @@ class _BoardPainter extends CustomPainter {
       oldDelegate.board != board ||
       oldDelegate.lastMove != lastMove ||
       oldDelegate.hint != hint ||
+      oldDelegate.suggestions != suggestions ||
       oldDelegate.selected != selected ||
       oldDelegate.selectedColor != selectedColor ||
       oldDelegate.influence != influence;
