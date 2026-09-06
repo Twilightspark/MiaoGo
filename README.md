@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.2.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.3.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -32,7 +32,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 |---|---|
 | **首页 · Home** | 顶部用户区（头像 / 名称 / 设置）+ 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 统一功能卡（每日一题 · 快速对弈 · 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录。Sticky user header (avatar / name / settings) + stats card + unified feature cards (daily problem / quick play / career tournament) + quick entries + lazy-loaded game & tournament history. |
 | **对弈 · Play** | **生涯模式**（随机大赛、积分升降级）与**人机模式**（自由选段位 / 尺寸 / 规则 / 落子方式）。共用对局页：顶部选手卡片、两步/双击落子、悔棋、停手、实时 ownership 热力图、胜率走势曲线、保存续弈与弃局、终局数子、保存棋谱。Career tournament mode & Free-play mode. Shared game page: player cards, two-step/double-tap placement, undo, pass, real-time ownership heatmap, black-winrate curve, save/resume & abandon, scoring, SGF save. |
-| **棋谱 · Records** | 个人棋谱 / 历史名谱 / 研究棋谱；复盘：逐步回放、任意手位看势力范围、AI 分析下一手、终局数子。Personal games, 11 historical famous games, and review with per-move territory + AI analysis. |
+| **棋谱 · Records** | 个人棋谱 / 历史名谱 / 研究棋谱；复盘（历史对弈回看）：逐步回放、逐手黑方胜率曲线、任意手位看势力范围，可进入「试下」自由推演（悔棋 / 停手 / 点目），双返回或退出直达首页。Personal games, 11 historical famous games, and review with per-move black-winrate curve, territory view, and a free try-play mode. |
 | **功课 · Study** | 入门基础（规则 / 术语图文）、定式布局（SGF 序列 + 讲解）、**422 道死活题**（答题判定 + 正解讲解 + 进度）。Lessons, joseki patterns, and 422 graded life-and-death problems with solutions & progress. |
 | **设置 · Settings** | 棋盘 / 棋子风格、棋盘大小（9 / 13 / 19）、对弈规则（中 / 韩 / 日，贴目联动）、音效、关于与数据清除。Board & stone styles, board size, ruleset, sound, about & data reset. |
 
@@ -130,20 +130,21 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 
 ## 路线图 · Roadmap
 
-### 1.2.0（当前 · Current）
+### 1.3.0（当前 · Current）
 
-对局体验打磨：两步/双击落子、保存续弈与弃局、胜率走势曲线、实时分析整合。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)。
+复盘重构 + 个人积分体系 v2。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
+
+- **复盘重构「历史对弈回看」**：逐步回放 + 逐手黑方胜率曲线；任意局面进入**试下**自由推演
+  （黑白交替落子 / 悔棋 / 停手 / 点目，两连停手出结果），返回精确复原；双返回或「退出」直达首页。
+- **个人积分体系 v2**：等级档差改为级内 10 分/档、段位区逐档 +30%（10×1.3^n）；负局扣分可降级；
+  人机对弈即时按对手档差加权计分（胜低 5 档不得分 / 输高 5 档不扣分，和棋弃局 0 分）；
+  大赛按名次一次性结算（冠军 X / 亚军 X/2 / 四强 X/4 / 八强 0）。
+
+### 1.2.0
 
 ### 1.1.0
 
 首页重构与视觉统一 + 玩家进度体系。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
-
-- 顶部用户区固定（头像 / 名称 / 设置同一水平线居中），去掉段位徽章与名称弹窗
-- 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 每日一题（日期种子 5 题，完成即打卡）
-- 三张统一功能卡（每日一题 / 快速对弈 / 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录（空态居中）
-- SVG 图标体系：`assets/icons` 9 枚语义色图标 + `AppIconTile` 统一圆底图标瓦片
-- 设置页：等级 tag 改头像（点击弹头像修改框）、底部红色「重生棋手」一键重置全部进度
-- 赛事对局 ↔ 棋谱（`tournamentId`）贯通，竞赛历史可复盘单局
 
 ### 1.0.0
 
