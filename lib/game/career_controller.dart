@@ -15,7 +15,8 @@ import 'package:miaogo/storage/user_store.dart';
 /// - 玩家完成一轮 → [resolveMatch] 判定本场 + 自动模拟同轮其余场次 + 配对下一轮；
 ///   被淘汰则自动模拟剩余赛程并结算。
 /// - 大赛完结（夺冠 / 淘汰 / 退赛）后为该尺寸自动生成新大赛。
-/// - 积分：胜 +20 / 负 +5、冠军 +30，赛事完结统一结算；**提前退赛无任何积分**。
+/// - 积分：按名次一次性发放（冠军 = 最强对手上一档档差 X，亚军 X/2，四强 X/4，
+///   八强 0），赛事完结统一结算；**提前退赛无任何积分**。
 class CareerController extends Notifier<CareerState> {
   static const _key = 'career_state';
 
@@ -163,7 +164,8 @@ class CareerController extends Notifier<CareerState> {
     return result;
   }
 
-  /// 完结结算：积分（胜20/负5/冠军+30）+ 胜负局数 + 参赛/冠军统计 + 段位联动。
+  /// 完结结算：按名次一次性发放积分（冠军 X / 亚军 X/2 / 四强 X/4 / 八强 0）
+  /// + 胜负局数 + 参赛/冠军统计 + 段位联动。
   void _settle(CareerTournament tournament) {
     final player = tournament.player!;
     var wins = 0;

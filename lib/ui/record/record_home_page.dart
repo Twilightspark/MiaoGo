@@ -31,7 +31,7 @@ class _RecordHomePageState extends ConsumerState<RecordHomePage> {
       final game = Sgf.parse(content);
       if (!mounted) return;
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ReviewPage(game: game, title: record.opponentName),
+        builder: (_) => ReviewPage(game: game),
       ));
     } on FormatException {
       if (mounted) {
@@ -44,7 +44,7 @@ class _RecordHomePageState extends ConsumerState<RecordHomePage> {
 
   void _openFamous(FamousGame game) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReviewPage(game: game.game, title: game.info.title),
+      builder: (_) => ReviewPage(game: game.game),
     ));
   }
 

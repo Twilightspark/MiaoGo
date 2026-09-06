@@ -96,7 +96,7 @@ void main() {
       expect(t.placementOf(t.championId!), 1);
     });
 
-    test('全胜夺冠：三连胜 → 冠军，积分 3×20+30=90', () {
+    test('全胜夺冠：冠军奖励 = 最强对手上一档档差（18级组 X=10）', () {
       final t = build();
       advanceAfterPlayerMatch(t, playerWon: true, random: math.Random(1));
       advanceAfterPlayerMatch(t, playerWon: true, random: math.Random(2));
@@ -106,17 +106,18 @@ void main() {
       expect(r.champion, isTrue);
       expect(t.championId, kPlayerId);
       expect(t.placementOf(kPlayerId), 1);
-      expect(t.playerEarnedPoints(), 90);
+      expect(t.playerEarnedPoints(), 10); // 级内组最强对手档差恒为 10
       expect(t.status, CareerTournamentStatus.completed);
     });
 
-    test('亚军：决赛失利 → 名次2', () {
+    test('亚军：决赛失利 → 名次2，奖励 X/2', () {
       final t = build();
       advanceAfterPlayerMatch(t, playerWon: true, random: math.Random(1));
       advanceAfterPlayerMatch(t, playerWon: true, random: math.Random(2));
       final r = advanceAfterPlayerMatch(t, playerWon: false, random: math.Random(3));
       expect(r.complete, isTrue);
       expect(t.placementOf(kPlayerId), 2);
+      expect(t.playerEarnedPoints(), 5); // floor(10/2)
       expect(t.championId, isNotNull);
     });
   });

@@ -9,7 +9,7 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('sharedPreferencesProvider 必须在 main() 中 override');
 });
 
-/// 用户档案：名称、头像、段位、大赛积分、生涯统计。
+/// 用户档案：名称、头像、段位、个人积分（竞赛+快速对弈共用，驱动升降级）、对弈/大赛统计。
 class UserProfile {
   const UserProfile({
     required this.name,
@@ -144,45 +144,66 @@ class UserStore extends Notifier<UserProfile> {
     ));
   }
 
-  /// 赛事完结统一结算（P3）：积分 + 胜负局数 + 参赛/冠军统计 + 段位联动。
+  /// 统一记账：积分增减（可负，[RankSystem.reconcile] 钳 0 并联动升降级）+
+  /// 胜负/总局数/参赛/冠军统计。
+  void _commit({
+    required int pointsDelta,
+    required int wins,
+    required int losses,
+    required int totalGames,
+    required int participations,
+    required int championships,
+  }) {
+    final reconciled =
+        RankSystem.reconcile(state.careerPoints + pointsDelta, state.rankIndex);
+    _persist(state.copyWith(
+      rankIndex: reconciled.rank,
+      careerPoints: reconciled.points,
+      wins: state.wins + wins,
+      losses: state.losses + losses,
+      totalGames: state.totalGames + totalGames,
+      participations: state.participations + participations,
+      championships: state.championships + championships,
+    ));
+  }
+
+  /// 赛事完结统一结算：按名次一次性奖励 + 胜负局数 + 参赛/冠军统计 + 段位联动。
   ///
-  /// 大赛按「胜 +20 / 负 +5、冠军 +30」在赛事完结时一次性结算
-  /// （退赛不调用本方法 = 无任何积分奖励）。
+  /// 大赛奖励：冠军 X / 亚军 X/2 / 四强 X/4 / 八强 0（退赛不调用本方法 = 无任何积分奖励）。
   void settleTournament({
     required int wins,
     required int losses,
     required int points,
     required bool champion,
   }) {
-    final reconciled =
-        RankSystem.reconcile(state.careerPoints + points, state.rankIndex);
-    _persist(state.copyWith(
-      rankIndex: reconciled.rank,
-      careerPoints: reconciled.points,
-      wins: state.wins + wins,
-      losses: state.losses + losses,
-      totalGames: state.totalGames + wins + losses,
-      participations: state.participations + 1,
-      championships: state.championships + (champion ? 1 : 0),
-    ));
+    _commit(
+      pointsDelta: points,
+      wins: wins,
+      losses: losses,
+      totalGames: wins + losses,
+      participations: 1,
+      championships: champion ? 1 : 0,
+    );
+  }
+
+  /// 一局快速对弈（人机）即时结算：积分增减（可负、联动升降级）+ 胜负/总局数统计。
+  /// 弃局/中途退出不走本方法（不计分）；[draw] 表示和棋（0 分但计一局）。
+  void applyQuickMatch({
+    required bool won,
+    required bool draw,
+    required int pointsDelta,
+  }) {
+    _commit(
+      pointsDelta: pointsDelta,
+      wins: won ? 1 : 0,
+      losses: (!won && !draw) ? 1 : 0,
+      totalGames: 1,
+      participations: 0,
+      championships: 0,
+    );
   }
 
   void reset() => _persist(UserProfile.defaults());
-
-  /// 记录一局生涯对局结果，按大赛积分结算并联动段位升降。
-  void recordCareerResult({required bool won, required int pointsDelta}) {
-    final reconciled = RankSystem.reconcile(
-      state.careerPoints + pointsDelta,
-      state.rankIndex,
-    );
-    _persist(state.copyWith(
-      rankIndex: reconciled.rank,
-      careerPoints: reconciled.points,
-      wins: state.wins + (won ? 1 : 0),
-      losses: state.losses + (won ? 0 : 1),
-      totalGames: state.totalGames + 1,
-    ));
-  }
 }
 
 final userProfileProvider =

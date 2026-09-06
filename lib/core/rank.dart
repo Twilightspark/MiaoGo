@@ -1,7 +1,10 @@
 /// 段位体系：18级~1级（索引 0..17），1段~9段（索引 18..26），共 27 档。
 ///
-/// 大赛积分（careerPoints）为连续累计的绝对积分：跨过下一档阈值晋升，
-/// 跌破当前档底线降级（带上下限保护）。积分阈值步长为可调校准参数，集中定义于此。
+/// 个人积分（careerPoints）为连续累计的绝对积分：跨过下一档阈值晋升，
+/// 跌破当前档底线降级（带上下限保护；积分可增可减）。档差规则：
+/// - 级内（18级..1级，索引 0..16）每档固定 10 分；
+/// - 段位区域（1级->1段 起，索引 17..25）相邻档差在前一档差基础上 +30%。
+///   即 step = floor(10 × 1.3^(rank−16))：级内固定 10，段位区依次 13/16/21/28/37/48/62/81/106。
 class RankSystem {
   RankSystem._();
 
@@ -12,30 +15,38 @@ class RankSystem {
   static const int kTotalRanks = 27;
   static const int kDefaultRankIndex = 0; // 起始段位：18 级、0 积分（可调）
 
-  // ---- 大赛积分校准参数 ----
-  /// 级内升级一步（如 12级->11级）。
-  static const int kPointsPerKyuStep = 100;
+  // ---- 个人积分校准参数（档差） ----
+  /// 级内（18级->..->1级）每档所需积分。
+  static const int kPointsPerKyuStep = 10;
 
-  /// 1级 -> 1段（升段门槛）。
-  static const int kPointsPromoteToDan = 200;
+  /// 段位区域档差基准（1级->1段 = 10 × [kDanStepGrowth]^1）。
+  static const double kDanStepBase = 10;
 
-  /// 段内升一段（如 3段->4段）。
-  static const int kPointsPerDanStep = 150;
+  /// 段位区域档差每档增幅（+30%）。
+  static const double kDanStepGrowth = 1.3;
 
   static bool isValidRank(int rank) =>
       rank >= kMinRankIndex && rank <= kMaxRankIndex;
 
-  /// 从 [rank] 升到 rank+1 所需积分步长。
+  /// 从 [rank] 升到 rank+1 所需积分步长（`rank` 为 9 段时无上一档，调用方需自行兜底）。
   static int stepForRank(int rank) {
     assert(isValidRank(rank) && rank < kMaxRankIndex,
         'stepForRank 仅对 rank < kMaxRankIndex 有效');
-    if (rank >= kNumKyuRanks) {
-      return kPointsPerDanStep; // 18..25 段->段
+    if (rank < kNumKyuRanks - 1) {
+      return kPointsPerKyuStep; // 0..16 级->级（固定 10）
     }
-    if (rank == kNumKyuRanks - 1) {
-      return kPointsPromoteToDan; // index 17：1级->1段
+    // 17..25：段位区域，档差逐档 ×1.3。
+    return (kDanStepBase *
+            _pow(kDanStepGrowth, rank - (kNumKyuRanks - 2)))
+        .floor();
+  }
+
+  static double _pow(double base, int exp) {
+    var result = 1.0;
+    for (var i = 0; i < exp; i++) {
+      result *= base;
     }
-    return kPointsPerKyuStep; // 0..16 级->级
+    return result;
   }
 
   /// 晋升到 [rank] 档所需累计积分阈值（pointsForRank(0) == 0）。

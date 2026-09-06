@@ -53,7 +53,7 @@ void main() {
     expect(c.read(careerControllerProvider.notifier).signUp(t13.id), isFalse);
   });
 
-  test('夺冠：三连胜完结结算，积分90/冠军/参赛+1，历史与新9路大赛', () async {
+  test('夺冠：三连胜完结结算，冠军奖励 X=10 / 参赛+1，历史与新9路大赛', () async {
     final c = await makeContainer();
     final notifier = c.read(careerControllerProvider.notifier);
     final t9 = c
@@ -80,18 +80,19 @@ void main() {
     final rec = s.history.first;
     expect(rec.champion, isTrue);
     expect(rec.placement, 1);
-    expect(rec.points, 90); // 3×20 + 冠军30
+    expect(rec.points, 10); // 18级组最强对手档差 X=10
     expect(s.upcoming.where((t) => t.boardSize == 9), hasLength(1)); // 已补齐
 
     final user = c.read(userProfileProvider);
-    expect(user.careerPoints, 90);
+    expect(user.careerPoints, 10);
+    expect(user.rankIndex, 1); // 达 10 分阈值：18级升入17级
     expect(user.participations, 1);
     expect(user.championships, 1);
     expect(user.wins, 3);
     expect(user.totalGames, 3);
   });
 
-  test('淘汰：8强失利自动模拟完结，名次八强、积分5', () async {
+  test('淘汰：8强失利自动模拟完结，名次八强、无积分', () async {
     final c = await makeContainer();
     final notifier = c.read(careerControllerProvider.notifier);
     final t = c
@@ -109,12 +110,39 @@ void main() {
     final rec = s.history.first;
     expect(rec.withdrawn, isFalse);
     expect(rec.placement, 5);
-    expect(rec.points, 5); // 一负
+    expect(rec.points, 0); // 八强：不加不扣
+
+    final user = c.read(userProfileProvider);
+    expect(user.careerPoints, 0);
+    expect(user.rankIndex, 0);
+    expect(user.participations, 1);
+    expect(user.losses, 1);
+  });
+
+  test('亚军：决赛失利完结，名次2、奖励 X/2=5', () async {
+    final c = await makeContainer();
+    final notifier = c.read(careerControllerProvider.notifier);
+    final t = c
+        .read(careerControllerProvider)
+        .upcoming
+        .firstWhere((t) => t.boardSize == 9);
+    notifier.signUp(t.id);
+
+    notifier.resolveMatch(won: true); // 8强
+    notifier.resolveMatch(won: true); // 半决赛
+    final r = notifier.resolveMatch(won: false); // 决赛失利
+    expect(r.complete, isTrue);
+
+    final s = c.read(careerControllerProvider);
+    final rec = s.history.first;
+    expect(rec.placement, 2);
+    expect(rec.points, 5); // floor(X/2)
 
     final user = c.read(userProfileProvider);
     expect(user.careerPoints, 5);
-    expect(user.participations, 1);
+    expect(user.wins, 2);
     expect(user.losses, 1);
+    expect(user.participations, 1);
   });
 
   test('退赛：不产生任何积分/胜负/参赛结算，历史记退赛0分', () async {
@@ -171,7 +199,7 @@ void main() {
     expect(restored.upcoming, hasLength(2));
   });
 
-  test('段位升降联动：积分达阈值自动晋升', () async {
+  test('段位升降联动：夺冠 +10 达阈值自动晋升 17级', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final container = ProviderContainer(
@@ -184,14 +212,14 @@ void main() {
         .firstWhere((t) => t.boardSize == 9);
     notifier.signUp(t.id);
 
-    // 连赢三场得 90 分：18级→升入17级（阈值 stepForRank(0)=100 需100分，不够则再赢）
+    // 三连胜夺冠得 10 分：达到 18级->17级 阈值（10 分）自动晋升。
     notifier.resolveMatch(won: true);
     notifier.resolveMatch(won: true);
     final r = notifier.resolveMatch(won: true);
     expect(r.complete, isTrue);
     final user = container.read(userProfileProvider);
-    expect(user.careerPoints, 90);
-    expect(user.rankIndex, 0); // 90 < 100，未升级
+    expect(user.careerPoints, 10);
+    expect(user.rankIndex, 1); // 已升入 17级
     expect(user.participations, 1);
   });
 

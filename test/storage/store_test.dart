@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/rules.dart';
+import 'package:miaogo/game/career.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,26 +63,104 @@ void main() {
       expect(after.championships, 1);
     });
 
-    test('胜率计算', () async {
+    test('胜率计算（快速对弈即时结算）', () async {
       final container = await makeContainer();
       final notifier = container.read(userProfileProvider.notifier);
-      notifier.recordCareerResult(won: true, pointsDelta: 20);
-      notifier.recordCareerResult(won: false, pointsDelta: 5);
+      notifier.applyQuickMatch(
+        won: true,
+        draw: false,
+        pointsDelta:
+            CareerPoints.quickDelta(won: true, playerRank: 0, opponentRank: 0),
+      );
+      notifier.applyQuickMatch(
+        won: false,
+        draw: false,
+        pointsDelta:
+            CareerPoints.quickDelta(won: false, playerRank: 0, opponentRank: 0),
+      );
       final after = container.read(userProfileProvider);
+      expect(after.careerPoints, 2); // +4 再 −2
+      expect(after.totalGames, 2);
+      expect(after.wins, 1);
+      expect(after.losses, 1);
       expect(after.winRate, closeTo(0.5, 0.001));
     });
 
-    test('生涯对局结算：积分+段位联动', () async {
+    test('快速对弈扣分可降级：连胜升入 17级，连输跌回 18级', () async {
       final container = await makeContainer();
       final notifier = container.read(userProfileProvider.notifier);
-      final before = container.read(userProfileProvider);
-      notifier.recordCareerResult(won: true, pointsDelta: 20);
+      // 同档 +4 ×3 → 12 ≥ 10 升入 17级。
+      for (var i = 0; i < 3; i++) {
+        notifier.applyQuickMatch(
+          won: true,
+          draw: false,
+          pointsDelta:
+              CareerPoints.quickDelta(won: true, playerRank: 0, opponentRank: 0),
+        );
+      }
+      var after = container.read(userProfileProvider);
+      expect(after.careerPoints, 12);
+      expect(after.rankIndex, 1);
+      // 同档 −2 ×3 → 6 < 10 跌破 17级底线，跌回 18级。
+      for (var i = 0; i < 3; i++) {
+        notifier.applyQuickMatch(
+          won: false,
+          draw: false,
+          pointsDelta:
+              CareerPoints.quickDelta(won: false, playerRank: 0, opponentRank: 0),
+        );
+      }
+      after = container.read(userProfileProvider);
+      expect(after.careerPoints, 6);
+      expect(after.rankIndex, 0);
+    });
+
+    test('和棋：计一局但不增减积分', () async {
+      final container = await makeContainer();
+      final notifier = container.read(userProfileProvider.notifier);
+      notifier.applyQuickMatch(won: false, draw: true, pointsDelta: 0);
       final after = container.read(userProfileProvider);
-      expect(after.totalGames, before.totalGames + 1);
-      expect(after.wins, before.wins + 1);
-      expect(after.losses, before.losses);
-      expect(after.careerPoints, before.careerPoints + 20);
-      expect(after.rankIndex, before.rankIndex);
+      expect(after.totalGames, 1);
+      expect(after.wins, 0);
+      expect(after.losses, 0);
+      expect(after.careerPoints, 0);
+      expect(after.rankIndex, 0);
+    });
+
+    test('大赛完结统一结算：冠军 +10 升至 17级', () async {
+      final container = await makeContainer();
+      final notifier = container.read(userProfileProvider.notifier);
+      notifier.settleTournament(
+        wins: 3,
+        losses: 0,
+        points: CareerPoints.tournamentReward(
+            placement: 1, topOpponentRank: 0), // 冠军 X=10
+        champion: true,
+      );
+      final after = container.read(userProfileProvider);
+      expect(after.careerPoints, 10);
+      expect(after.rankIndex, 1);
+      expect(after.totalGames, 3);
+      expect(after.wins, 3);
+      expect(after.participations, 1);
+      expect(after.championships, 1);
+    });
+
+    test('大赛完结统一结算：八强 0 分只计负局', () async {
+      final container = await makeContainer();
+      final notifier = container.read(userProfileProvider.notifier);
+      notifier.settleTournament(
+        wins: 0,
+        losses: 1,
+        points: 0, // 八强无积分
+        champion: false,
+      );
+      final after = container.read(userProfileProvider);
+      expect(after.careerPoints, 0);
+      expect(after.rankIndex, 0);
+      expect(after.losses, 1);
+      expect(after.participations, 1);
+      expect(after.championships, 0);
     });
 
     test('持久化往返：重建容器后数据保留', () async {
@@ -91,8 +170,12 @@ void main() {
           overrides: [sharedPreferencesProvider.overrideWithValue(prefs)]);
       c1.read(userProfileProvider.notifier).updateName('往返测试');
       c1.read(userProfileProvider.notifier).updateAvatar('/data/avatar.png');
-      c1.read(userProfileProvider.notifier)
-          .recordCareerResult(won: true, pointsDelta: 100);
+      c1.read(userProfileProvider.notifier).applyQuickMatch(
+            won: true,
+            draw: false,
+            pointsDelta:
+                CareerPoints.quickDelta(won: true, playerRank: 0, opponentRank: 0),
+          );
       c1.read(userProfileProvider.notifier).recordParticipation(champion: true);
       c1.dispose();
 
@@ -103,9 +186,11 @@ void main() {
       expect(restored.name, '往返测试');
       expect(restored.avatarPath, '/data/avatar.png');
       expect(restored.wins, 1);
+      expect(restored.totalGames, 1);
       expect(restored.participations, 1);
       expect(restored.championships, 1);
-      expect(restored.careerPoints, 100);
+      expect(restored.careerPoints, 4);
+      expect(restored.rankIndex, 0);
     });
 
     test('重生重置为默认档案', () async {
@@ -113,7 +198,12 @@ void main() {
       final notifier = container.read(userProfileProvider.notifier);
       notifier.updateName('大师');
       notifier.updateAvatar('/data/a.png');
-      notifier.recordCareerResult(won: true, pointsDelta: 300);
+      notifier.applyQuickMatch(
+        won: true,
+        draw: false,
+        pointsDelta:
+            CareerPoints.quickDelta(won: true, playerRank: 0, opponentRank: 0),
+      );
       notifier.recordParticipation(champion: true);
       notifier.reset();
       final after = container.read(userProfileProvider);

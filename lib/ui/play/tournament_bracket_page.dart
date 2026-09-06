@@ -118,7 +118,8 @@ class _TournamentBracketPageState
         content: Text(
           result.champion
               ? '冠军奖励 +$points 积分'
-              : '止步${careerPlacementLabel(placement)}，获得 +$points 积分',
+              : '止步${careerPlacementLabel(placement)}'
+                  '${points > 0 ? '，获得 +$points 积分' : '，本赛无积分'}',
           textAlign: TextAlign.center,
         ),
         actions: [

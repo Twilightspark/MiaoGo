@@ -15,11 +15,14 @@ void main() {
   });
 
   group('pointsForRank 阈值', () {
-    test('首档阈值与单调性', () {
+    test('首档阈值与单调性（级内 10/档，段位区逐档 ×1.3）', () {
       expect(RankSystem.pointsForRank(0), 0);
-      expect(RankSystem.pointsForRank(17), 17 * 100);
-      expect(RankSystem.pointsForRank(18), 17 * 100 + 200);
-      expect(RankSystem.pointsForRank(26), 17 * 100 + 200 + 8 * 150);
+      expect(RankSystem.pointsForRank(1), 10); // 17级
+      expect(RankSystem.pointsForRank(2), 20); // 16级
+      expect(RankSystem.pointsForRank(17), 170); // 1级
+      expect(RankSystem.pointsForRank(18), 183); // 1段
+      expect(RankSystem.pointsForRank(19), 199); // 2段
+      expect(RankSystem.pointsForRank(26), 582); // 9段
       for (var i = 1; i <= 26; i++) {
         expect(
           RankSystem.pointsForRank(i),
@@ -28,44 +31,45 @@ void main() {
       }
     });
 
-    test('步长与升段门槛', () {
-      expect(RankSystem.stepForRank(0), 100);
-      expect(RankSystem.stepForRank(16), 100);
-      expect(RankSystem.stepForRank(17), 200);
-      expect(RankSystem.stepForRank(18), 150);
-      expect(RankSystem.stepForRank(25), 150);
+    test('步长：级内 10，段位区档差递增', () {
+      expect(RankSystem.stepForRank(0), 10);
+      expect(RankSystem.stepForRank(16), 10);
+      expect(RankSystem.stepForRank(17), 13); // 1级->1段 = 10×1.3
+      expect(RankSystem.stepForRank(18), 16);
+      expect(RankSystem.stepForRank(19), 21);
+      expect(RankSystem.stepForRank(25), 106); // 8段->9段 = 10×1.3^9
     });
   });
 
   group('reconcile 积分升降级', () {
     test('积分位于档位区间内不升降', () {
-      final r = RankSystem.reconcile(850, 8);
+      final r = RankSystem.reconcile(85, 8);
       expect(r.rank, 8);
-      expect(r.points, 850);
+      expect(r.points, 85);
     });
 
     test('达到阈值晋升', () {
-      final r = RankSystem.reconcile(900, 8);
+      final r = RankSystem.reconcile(90, 8);
       expect(r.rank, 9);
-      expect(r.points, 900);
+      expect(r.points, 90);
     });
 
-    test('跨多档连升', () {
-      final r = RankSystem.reconcile(1150, 8);
-      expect(r.rank, 11);
-      expect(r.points, 1150);
+    test('跨多档连升（级内每档 10）', () {
+      final r = RankSystem.reconcile(150, 8);
+      expect(r.rank, 15);
+      expect(r.points, 150);
     });
 
-    test('1级 升 1段 需 200 分', () {
-      final r = RankSystem.reconcile(1900, 17);
+    test('1级 升 1段 需 183 分', () {
+      final r = RankSystem.reconcile(183, 17);
       expect(r.rank, 18);
-      expect(r.points, 1900);
+      expect(r.points, 183);
     });
 
-    test('跌破底线降级', () {
-      final r = RankSystem.reconcile(999, 10);
+    test('跌破底线降级（负局扣分可触发）', () {
+      final r = RankSystem.reconcile(95, 10);
       expect(r.rank, 9);
-      expect(r.points, 999);
+      expect(r.points, 95);
     });
 
     test('降级不破 18级 底线', () {

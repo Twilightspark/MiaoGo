@@ -47,7 +47,7 @@ void main() {
     return [sharedPreferencesProvider.overrideWithValue(prefs)];
   }
 
-  testWidgets('复盘页渲染：逐步跳转 / 手数 / 点目对话框', (tester) async {
+  testWidgets('复盘页渲染：逐步跳转 / 手数 / 试下点目 / 双停手终局', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -61,9 +61,17 @@ void main() {
     await tester.pump(); // 处理 post-frame load
     await tester.pump();
 
-    // 初始：开局手位，棋盘空。
+    // 初始：开局手位，棋盘空；回看模式无「点目」。
     expect(find.text('开局'), findsOneWidget);
     expect(find.textContaining('共 4 手'), findsOneWidget);
+    expect(find.byKey(const ValueKey('review_score')), findsNothing);
+    expect(find.byKey(const ValueKey('review_try')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review_exit')), findsOneWidget);
+    // 顶栏无返回箭头/标题；胜率曲线按钮在（引擎未就绪时禁用）。
+    final winrateBtn =
+        tester.widget<IconButton>(find.byKey(const ValueKey('review_winrate')));
+    expect(winrateBtn.onPressed, isNull);
+    expect(find.byIcon(Icons.show_chart), findsOneWidget);
 
     // 下一手：棋盘出现黑子 dd。
     await tester.tap(find.byKey(const ValueKey('review_next')));
@@ -80,15 +88,39 @@ void main() {
     await tester.pump();
     expect(find.text('开局'), findsOneWidget);
 
-    // 点目：弹出结果对话框。
+    // 跳到末手后进入试下：导航键替换为试下工具。
     await tester.tap(find.byKey(const ValueKey('review_last')));
     await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('review_try')));
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('review_first')), findsNothing);
+    expect(find.byKey(const ValueKey('review_undo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review_pass')), findsOneWidget);
+
+    // 点目：弹出结果对话框；关闭后仍在试下。
     await tester.tap(find.byKey(const ValueKey('review_score')));
     await tester.pumpAndSettle();
     expect(find.text('当前局面点目'), findsOneWidget);
     expect(find.textContaining('规则'), findsOneWidget);
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('review_undo')), findsOneWidget);
+
+    // 连续两次停手 → 试下终局自动弹点目。
+    await tester.tap(find.byKey(const ValueKey('review_pass')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review_pass')));
+    await tester.pumpAndSettle();
+    expect(find.text('当前局面点目'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    // 返回：恢复进入试下前的历史末手（回看态）。
+    await tester.tap(find.byKey(const ValueKey('review_back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('review_first')), findsOneWidget);
+    expect(find.text('第 4 手'), findsOneWidget);
   });
 
   testWidgets('个人棋谱点击进入复盘', (tester) async {

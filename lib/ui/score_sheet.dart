@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/game/game_controller.dart';
 
-/// 成绩面板动作。
-enum ScoreSheetAction { restart, exit }
-
 /// 终局成绩面板：胜负 / 目差 / 分项明细 / 规则信息。
 class ScoreSheetDialog extends StatelessWidget {
   const ScoreSheetDialog({super.key, required this.game});
@@ -86,15 +83,10 @@ class ScoreSheetDialog extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton.icon(
-          onPressed: () => Navigator.pop(context, ScoreSheetAction.exit),
-          icon: const Icon(Icons.exit_to_app),
-          label: const Text('返回'),
-        ),
         FilledButton.icon(
-          onPressed: () => Navigator.pop(context, ScoreSheetAction.restart),
-          icon: const Icon(Icons.replay),
-          label: const Text('再来一局'),
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.exit_to_app),
+          label: const Text('退出'),
         ),
       ],
     );

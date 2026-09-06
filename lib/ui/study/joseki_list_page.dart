@@ -16,7 +16,7 @@ class JosekiListPage extends ConsumerWidget {
       final game = Sgf.parse(data);
       if (!context.mounted) return;
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ReviewPage(game: game, title: entry.title),
+        builder: (_) => ReviewPage(game: game),
       ));
     } on Exception {
       if (context.mounted) {

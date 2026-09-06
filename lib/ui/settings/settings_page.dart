@@ -201,7 +201,7 @@ class SettingsPage extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('版本 1.2.0'),
+            Text('版本 1.3.0'),
             SizedBox(height: 8),
             Text('本地 KataGo 引擎驱动的围棋对弈与学习应用。'),
           ],

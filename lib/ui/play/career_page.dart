@@ -370,7 +370,7 @@ class _HistoryCard extends StatelessWidget {
             maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${record.boardSize} 路 · ${_fmtDate(record.date)}'
-          '${withdrawn ? '' : ' · +${record.points} 分'}',
+          '${withdrawn ? '' : (record.points > 0 ? ' · +${record.points} 分' : ' · 无积分')}',
           style: theme.textTheme.bodySmall,
         ),
         trailing: Container(

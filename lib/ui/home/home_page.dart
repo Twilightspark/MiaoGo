@@ -727,7 +727,7 @@ class _GameHistoryCard extends ConsumerWidget {
       final game = Sgf.parse(content);
       if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ReviewPage(game: game, title: record.opponentName),
+        builder: (_) => ReviewPage(game: game),
       ));
     } on FormatException {
       if (context.mounted) {
@@ -790,7 +790,7 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
                     ?.copyWith(fontWeight: FontWeight.w600)),
             subtitle: Text(
               '${result.boardSize} 路 · ${_fmtShortDate(result.date)}'
-              '${withdrawn ? '' : ' · +${result.points} 分'}'
+              '${withdrawn ? '' : (result.points > 0 ? ' · +${result.points} 分' : ' · 无积分')}'
               '${games.isEmpty ? '' : ' · ${games.length} 局'}',
               style: theme.textTheme.bodySmall,
             ),
@@ -876,7 +876,7 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
     try {
       final game = Sgf.parse(content);
       await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ReviewPage(game: game, title: record.opponentName),
+        builder: (_) => ReviewPage(game: game),
       ));
     } on FormatException {
       if (context.mounted) {

@@ -8,6 +8,7 @@ import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/core/scoring.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/engine/engine_controller.dart';
+import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/match_engine.dart';
 import 'package:miaogo/game/move_provider.dart';
 import 'package:miaogo/storage/pending_game_store.dart';
@@ -615,6 +616,22 @@ class GameController extends Notifier<GameState> {
       ),
     );
     await ref.read(recordStoreProvider.notifier).add(record);
+    // 人机（快速对弈）终局即时结算个人积分/段位：和棋 0 分，胜负按相对档差加权；
+    // 弃局不计分；生涯大赛由赛事完结统一结算（此处不结算）。
+    if (_source == GameSource.ai && !_abandoned) {
+      final store = ref.read(userProfileProvider.notifier);
+      if (isDraw) {
+        store.applyQuickMatch(won: false, draw: true, pointsDelta: 0);
+      } else {
+        final won = outcome == GameResult.win;
+        final delta = CareerPoints.quickDelta(
+          won: won,
+          playerRank: user.rankIndex,
+          opponentRank: s.difficulty,
+        );
+        store.applyQuickMatch(won: won, draw: false, pointsDelta: delta);
+      }
+    }
     // 终局/弃局后该局不再可续：清除同槽位存档。
     await ref
         .read(pendingGameStoreProvider.notifier)

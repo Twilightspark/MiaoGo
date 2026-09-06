@@ -187,4 +187,104 @@ void main() {
     ctrl.last();
     expect(container.read(reviewControllerProvider)!.index, 0);
   });
+
+  test('试下：进入 / 黑白交替 / 悔棋 / 双停手终局 / 返回恢复', () {
+    // dd 黑(3,3)、ee 白(4,4)、ff 黑(5,5)。
+    const sgf = '(;GM[1]SZ[9]RU[chinese]KM[7.5];B[dd];W[ee];B[ff])';
+    final game = Sgf.parse(sgf);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final ctrl = container.read(reviewControllerProvider.notifier);
+    ctrl.load(game);
+    ctrl.jumpTo(2);
+
+    ctrl.enterTry();
+    var s = container.read(reviewControllerProvider)!;
+    expect(s.inTry, isTrue);
+    expect(s.index, 2);
+    expect(s.tryMoves, isEmpty);
+    expect(s.moves.length, 2);
+    expect(s.board.at(3, 3), PlayerColor.black);
+    expect(s.board.at(4, 4), PlayerColor.white);
+    expect(s.toMove, PlayerColor.black);
+    expect(s.tryEnded, isFalse);
+
+    // 黑在 ff 落子 → 轮到白。
+    expect(ctrl.placeTryMove(5, 5), isTrue);
+    s = container.read(reviewControllerProvider)!;
+    expect(s.moves.length, 3);
+    expect(s.tryMoves, [const Move.point(PlayerColor.black, 5, 5)]);
+    expect(s.toMove, PlayerColor.white);
+    expect(s.board.at(5, 5), PlayerColor.black);
+
+    // 占点非法落子：不改变状态。
+    expect(ctrl.placeTryMove(5, 5), isFalse);
+    expect(container.read(reviewControllerProvider)!.moves.length, 3);
+
+    // 白落 gg(6,6) → 轮到黑。
+    expect(ctrl.placeTryMove(6, 6), isTrue);
+    s = container.read(reviewControllerProvider)!;
+    expect(s.moves.length, 4);
+    expect(s.toMove, PlayerColor.black);
+    expect(s.board.at(6, 6), PlayerColor.white);
+
+    // 悔棋只撤销试下新增（移除 gg），不动主链。
+    ctrl.undoTry();
+    s = container.read(reviewControllerProvider)!;
+    expect(s.tryMoves.length, 1);
+    expect(s.moves.length, 3);
+    expect(s.board.at(6, 6), isNull);
+    expect(s.toMove, PlayerColor.white);
+
+    // 停手(PASS)两次 → 试下终局，禁止再落子。
+    ctrl.tryPass();
+    s = container.read(reviewControllerProvider)!;
+    expect(s.tryEnded, isFalse);
+    ctrl.tryPass();
+    s = container.read(reviewControllerProvider)!;
+    expect(s.tryEnded, isTrue);
+    expect(ctrl.placeTryMove(7, 7), isFalse);
+
+    // 悔棋解除终局（撤掉最后一个 PASS）。
+    ctrl.undoTry();
+    s = container.read(reviewControllerProvider)!;
+    expect(s.tryEnded, isFalse);
+
+    // 试下期间跳转被忽略。
+    ctrl.jumpTo(0);
+    s = container.read(reviewControllerProvider)!;
+    expect(s.inTry, isTrue);
+    expect(s.index, 2);
+
+    // 返回：恢复到进入试下前的历史局面。
+    ctrl.exitTry();
+    s = container.read(reviewControllerProvider)!;
+    expect(s.inTry, isFalse);
+    expect(s.index, 2);
+    expect(s.moves.length, 2);
+    expect(s.board.at(5, 5), isNull);
+    expect(s.board.at(3, 3), PlayerColor.black);
+  });
+
+  test('进入试下不因主链末尾连续 PASS 直接终局', () {
+    // 主链结束为 W[] B[]（连续两 PASS，历史记收官）。
+    const sgf = '(;SZ[9]RU[chinese];B[aa];W[];B[])';
+    final game = Sgf.parse(sgf);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final ctrl = container.read(reviewControllerProvider.notifier);
+    ctrl.load(game);
+    ctrl.last();
+    final before = container.read(reviewControllerProvider)!;
+    expect(before.moves.length, 3);
+    expect(before.moves[1].isPass, isTrue);
+
+    ctrl.enterTry();
+    var s = container.read(reviewControllerProvider)!;
+    expect(s.inTry, isTrue);
+    expect(s.tryEnded, isFalse);
+    expect(ctrl.placeTryMove(1, 1), isTrue);
+    s = container.read(reviewControllerProvider)!;
+    expect(s.moves.length, 4);
+  });
 }

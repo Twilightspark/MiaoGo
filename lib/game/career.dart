@@ -4,7 +4,8 @@
 /// - 赛事名/选手名随机生成（中国/韩国/日本）。
 /// - AI 段位在玩家 ±2 档内（AGENTS.md §6），AI 间胜负按段位差加权随机。
 /// - 玩家完成一轮后同轮其余场次自动模拟；玩家被淘汰则自动模拟剩余赛程并产生冠军。
-/// - 积分：胜 +20 / 负 +5，冠军额外 +30（赛事完结统一结算，退赛无积分）。
+/// - 积分：按名次一次性结算——冠军 = 最强对手上一档档差 X，亚军 X/2，四强 X/4，
+///   八强 0（赛事完结统一结算，退赛无积分）。
 library;
 
 import 'dart:math' as math;
@@ -18,21 +19,104 @@ const String kPlayerId = 'player';
 /// 大赛人数（8 强淘汰赛）。
 const int kTournamentPlayers = 8;
 
-/// 积分结算常量（AGENTS.md §6，可调校准）。
+/// 个人积分结算常量与纯函数（AGENTS.md §6，集中可调校准；所有取整向下）。
+///
+/// 档差：见 [RankSystem.stepForRank]（级内 10/档，段位区域逐档 ×1.3）。
+/// - 快速对弈（人机）：同档基础胜分 W = ceil(step/3)（约连赢 3 场晋级），
+///   负分 = floor(W/2)（约连输 6 场降级）；按对手相对档差 d = 对手档−自己档 加权：
+///   胜分 ×clamp(1+0.2d, 0, 2)（对手低自己 5 档不得分），
+///   负分 ×clamp(1−0.2d, 0, 2)（对手高自己 5 档不扣分）。
+/// - 大赛（生涯）：封顶 X = 赛事最强对手「上一档」档差；冠军 X / 亚军 floor(X/2) /
+///   四强 floor(X/4) / 八强 0，赛事完结统一结算。
 class CareerPoints {
   CareerPoints._();
 
-  /// 每局胜积分。
-  static const int win = 20;
+  /// 档差加权：每档差异 ±20%。
+  static const double _weightPerStep = 0.2;
 
-  /// 每局负积分。
-  static const int loss = 5;
+  /// 加权 clamp 上限（5 档封顶）。
+  static const double _weightCap = 2.0;
 
-  /// 冠军额外奖励。
-  static const int championBonus = 30;
+  /// 归零档差：对手低自己 ≥5 档获胜不得分；对手高自己 ≥5 档失利不扣分。
+  static const int _zeroRankSpread = 5;
 
   /// AI 对手段位区间：玩家 ± 该档。
   static const int rankSpread = 2;
+
+  /// 胜分加权系数：自己越弱（d>0）越加。
+  static double _gainWeight(int d) =>
+      (1 + _weightPerStep * d).clamp(0.0, _weightCap);
+
+  /// 负分加权系数：对手越强（d>0）扣得越少。
+  static double _lossWeight(int d) =>
+      (1 - _weightPerStep * d).clamp(0.0, _weightCap);
+
+  /// [rank] 升到下一档的档差（9 段兜底用上一档差）。
+  static int _rankStep(int rank) {
+    if (rank >= RankSystem.kMaxRankIndex) {
+      return RankSystem.stepForRank(RankSystem.kMaxRankIndex - 1);
+    }
+    return RankSystem.stepForRank(rank);
+  }
+
+  /// 同档基础胜分 W：保证约连赢 3 场可晋级。
+  static int baseWin(int playerRank) {
+    final step = _rankStep(playerRank);
+    return (step + 2) ~/ 3; // ceil(step/3)
+  }
+
+  /// 同档基础负分：获取分速度的一半，约连输 6 场降级。
+  static int baseLoss(int playerRank) {
+    return math.max(1, baseWin(playerRank) ~/ 2);
+  }
+
+  /// 一局快速对弈（人机）净积分：胜为正、负为负（和/弃由调用方按 0 处理）。
+  static int quickDelta({
+    required bool won,
+    required int playerRank,
+    required int opponentRank,
+  }) {
+    final d = opponentRank - playerRank;
+    if (won) {
+      if (d <= -_zeroRankSpread) return 0;
+      return (baseWin(playerRank) * _gainWeight(d)).floor();
+    }
+    if (d >= _zeroRankSpread) return 0;
+    return -(baseLoss(playerRank) * _lossWeight(d)).floor();
+  }
+
+  /// 大赛封顶 X = 最强对手档的「上一档」档差。
+  static int tournamentCap(int topOpponentRank) {
+    final r = topOpponentRank < RankSystem.kMaxRankIndex
+        ? topOpponentRank
+        : RankSystem.kMaxRankIndex - 1;
+    return RankSystem.stepForRank(r);
+  }
+
+  /// 大赛按名次一次性奖励：1 冠军 X / 2 亚军 floor(X/2) /
+  /// 3 四强 floor(X/4) / 其余名次（含八强）0。
+  static int tournamentReward({
+    required int placement,
+    required int topOpponentRank,
+  }) {
+    final x = tournamentCap(topOpponentRank);
+    return switch (placement) {
+      1 => x,
+      2 => x ~/ 2,
+      3 => x ~/ 4,
+      _ => 0,
+    };
+  }
+
+  /// 该赛事最强对手（非玩家）档位；无对手返回 0。
+  static int strongestOpponentRank(CareerTournament tournament) {
+    var top = 0;
+    for (final p in tournament.players) {
+      if (p.isPlayer) continue;
+      if (p.rankIndex > top) top = p.rankIndex;
+    }
+    return top;
+  }
 }
 
 /// 选手国籍（随机中文名来源）。
@@ -230,17 +314,17 @@ class CareerTournament {
     return null;
   }
 
-  /// 玩家当前已获得的比赛积分（含冠军奖励，未结算用途展示）。
+  /// 玩家本赛事可结算积分：按名次一次性结算
+  /// （冠军 X / 亚军 X/2 / 四强 X/4 / 八强 0；未决返回 0，退赛不走本方法）。
   int playerEarnedPoints() {
     final pid = player?.id;
     if (pid == null) return 0;
-    var points = 0;
-    for (final m in matches) {
-      if (!m.decided || !m.involves(pid)) continue;
-      points += m.winnerId == pid ? CareerPoints.win : CareerPoints.loss;
-    }
-    if (championId == pid) points += CareerPoints.championBonus;
-    return points;
+    final placement = placementOf(pid);
+    if (placement == null) return 0;
+    return CareerPoints.tournamentReward(
+      placement: placement,
+      topOpponentRank: CareerPoints.strongestOpponentRank(this),
+    );
   }
 
   Map<String, dynamic> toJson() => {

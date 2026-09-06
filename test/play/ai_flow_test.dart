@@ -237,7 +237,7 @@ void main() {
     expect(find.text('第 0 手'), findsOneWidget);
   });
 
-  testWidgets('点目按钮：直接终局并展示成绩面板', (tester) async {
+  testWidgets('点目按钮：直接终局并展示成绩面板，退出回首页', (tester) async {
     await pumpToGame(tester);
     await tester.tap(find.byKey(const ValueKey('ai_start_button')));
     await tester.pumpAndSettle();
@@ -253,7 +253,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('game_score')));
     await tester.pumpAndSettle();
     expect(find.text('对局结束'), findsNWidgets(2)); // 状态栏 + 成绩面板标题
-    expect(find.text('再来一局'), findsOneWidget);
+    // 弹窗仅保留「退出」：无「返回」/「再来一局」
+    expect(find.text('退出'), findsOneWidget);
+    expect(find.text('返回'), findsNothing);
+    expect(find.text('再来一局'), findsNothing);
+
+    // 点击退出：直接回到首页（快速对弈卡可见）
+    await tester.tap(find.text('退出'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsNothing);
+    expect(find.text('快速对弈'), findsOneWidget);
   });
 
   testWidgets('实时分析：按钮开启热力图，再点关闭', (tester) async {
