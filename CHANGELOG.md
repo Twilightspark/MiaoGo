@@ -8,6 +8,18 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.5.0] - 2026-09-07
+
+新增休闲观赛：本地 KataGo 双引擎 AI 对弈，用户仅旁观。
+
+### Added
+
+- **观赛（AI 互弈）**：观赛设置页选择棋手等级 / 棋盘尺寸 / 对弈规则后开局，两名本地 KataGo 棋手
+  黑先白后自动互弈（每手至少 10 秒等思考时长由观赛页驱动，`watch_controller.dart` 只负责棋盘状态机：
+  落子 / PASS / 终局数子），支持实时 ownership 热力图与胜率曲线，终局后由用户决定是否保存不自动写棋谱。
+- 首页新增「观赛」入口与 `assets/icons/watch.svg` 图标；`app_icon.dart` / `winrate_panel.dart` /
+  `board_widget.dart` 随之扩展以复用观赛场景。
+
 ## [1.4.0] - 2026-09-07
 
 功课模块打磨：基础规则新手指引 + 定式库数据化重构。
@@ -145,6 +157,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.5.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.2.0
