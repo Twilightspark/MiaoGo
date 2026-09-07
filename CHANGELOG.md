@@ -8,6 +8,21 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.6.0] - 2026-09-07
+
+新增 SGF 棋谱导入，并以导入取代内置「历史名谱」模块。
+
+### Added
+
+- **SGF 导入**：`record_home_page` 新增导入入口，走系统文件选择器（Android SAF）仅过滤 `.sgf`，
+  解析成功即加入个人棋谱并可复盘（`lib/ui/record/sgf_import.dart`）；新增 `file_picker` 依赖。
+
+### Changed
+
+- **移除内置历史名谱**：`assets/famous/*.sgf` 与 `lib/ui/record/famous_games.dart` 删除，
+  棋谱页三类中的「历史名谱」改为通过 SGF 导入外部棋谱来研究。
+- `review_controller.dart` / `record_store.dart` / 棋谱首页与相关 flow 测试随之调整。
+
 ## [1.5.0] - 2026-09-07
 
 新增休闲观赛：本地 KataGo 双引擎 AI 对弈，用户仅旁观。
@@ -157,6 +172,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.6.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.3.0
