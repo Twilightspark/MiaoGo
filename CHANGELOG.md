@@ -8,6 +8,25 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.4.0] - 2026-09-07
+
+功课模块打磨：基础规则新手指引 + 定式库数据化重构。
+
+### Added
+
+- **基础规则新手指引**：12 步交互引导（棋盘 / 气与提子 / 禁入点 / 连接分断 / 做眼 / 打劫 / 点目 / 停一手），
+  数据与引擎均为纯 Dart（`beginner_guide.dart`，可单测），配独立引导页（`beginner_guide_page.dart`）。
+- **定式练习页（查询式）**：完整 19 路棋盘，按设置落子方式落子；依据定式库推荐最高概率后续点位
+  （颜色深浅表示概率），下方列出命中定式，可逐手回放查看（上一手 / 下一手 / 退出）。
+
+### Changed
+
+- **定式库数据化重构**：原 `assets/lessons/*.sgf` + `lesson_data.dart` + `lessons_page.dart` /
+  `joseki_list_page.dart` 合并为离线生成器（`joseki/generator/corner.py`）产出的
+  `assets/joseki/joseki.json`；`lib/core/joseki.dart` 负责 8 对称归一化匹配（专供单测），
+  任一命中的定式均带可回放 SGF。
+- `board_widget.dart` / 功课首页随新交互同步调整；相关单元与 widget 测试随之更新。
+
 ## [1.3.0] - 2026-09-06
 
 复盘重构为「历史对弈回看」+ 个人积分体系 v2。
@@ -126,6 +145,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.4.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.1.0

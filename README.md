@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.3.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.4.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -130,21 +130,23 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 
 ## 路线图 · Roadmap
 
-### 1.3.0（当前 · Current）
+详细变更见 [`CHANGELOG.md`](CHANGELOG.md)
 
-复盘重构 + 个人积分体系 v2。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
+### 1.4.0（当前 · Current）
 
-- **复盘重构「历史对弈回看」**：逐步回放 + 逐手黑方胜率曲线；任意局面进入**试下**自由推演
-  （黑白交替落子 / 悔棋 / 停手 / 点目，两连停手出结果），返回精确复原；双返回或「退出」直达首页。
-- **个人积分体系 v2**：等级档差改为级内 10 分/档、段位区逐档 +30%（10×1.3^n）；负局扣分可降级；
-  人机对弈即时按对手档差加权计分（胜低 5 档不得分 / 输高 5 档不扣分，和棋弃局 0 分）；
-  大赛按名次一次性结算（冠军 X / 亚军 X/2 / 四强 X/4 / 八强 0）。
+功课模块新增基础规则新手指引与定式库重构（详见 `CHANGELOG.md`）。
+
+### 1.3.0
+
+复盘重构 + 个人积分体系 v2。
 
 ### 1.2.0
 
+对局体验打磨：两步/双击落子、保存续弈与弃局、胜率走势曲线、实时分析整合。
+
 ### 1.1.0
 
-首页重构与视觉统一 + 玩家进度体系。详细变更见 [`CHANGELOG.md`](CHANGELOG.md)：
+首页重构与视觉统一 + 玩家进度体系。
 
 ### 1.0.0
 
