@@ -10,7 +10,8 @@ import 'package:path_provider/path_provider.dart';
 enum GameSource {
   career('生涯'),
   ai('人机'),
-  research('研究');
+  research('研究'),
+  watch('观赛');
 
   const GameSource(this.label);
   final String label;

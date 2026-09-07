@@ -60,11 +60,13 @@ void main() {
     expect(find.text('当前棋力'), findsOneWidget);
     expect(find.text('18级'), findsWidgets);
 
-    // 每日一题 / 快速对弈 / 赛事生涯
+    // 每日一题 / 快速对弈 / 赛事生涯 / 休闲观赛
     expect(find.text('每日一题'), findsOneWidget);
     expect(find.text('做题'), findsOneWidget);
     expect(find.text('快速对弈'), findsOneWidget);
     expect(find.text('赛事生涯'), findsOneWidget);
+    expect(find.text('休闲观赛'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home_watch_button')), findsOneWidget);
 
     // 快捷入口
     for (final label in ['入门', '定式', '题库', '棋谱']) {

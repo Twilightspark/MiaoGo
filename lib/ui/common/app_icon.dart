@@ -13,10 +13,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 /// - record     棋谱 → 棋谱
 /// - history    历史 → 历史记录的对弈记录
 /// - competition 比赛 → 历史记录的竞赛
+/// - watch      观赛 → 休闲观赛（AI 互弈观战）
 abstract final class AppIcon {
   static const daily = 'assets/icons/daily.svg';
   static const play = 'assets/icons/play.svg';
   static const tournament = 'assets/icons/tournament.svg';
+  static const watch = 'assets/icons/watch.svg';
   static const basics = 'assets/icons/basics.svg';
   static const joseki = 'assets/icons/joseki.svg';
   static const library = 'assets/icons/library.svg';

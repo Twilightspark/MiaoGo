@@ -88,6 +88,7 @@ class GoBoardWidget extends StatelessWidget {
     super.key,
     required this.board,
     this.lastMove,
+    this.lastMoveEmphasis = false,
     this.hint,
     this.suggestions,
     this.marks,
@@ -101,6 +102,9 @@ class GoBoardWidget extends StatelessWidget {
 
   final GoBoard board;
   final Move? lastMove;
+
+  /// 是否对最新一手棋子做「双层光环」强调（观赛等场景提醒最新落子）。
+  final bool lastMoveEmphasis;
 
   /// AI 建议的下一步交叉点（松柏青标注）。
   final (int, int)? hint;
@@ -157,6 +161,7 @@ class GoBoardWidget extends StatelessWidget {
             painter: _BoardPainter(
               board: board,
               lastMove: lastMove,
+              lastMoveEmphasis: lastMoveEmphasis,
               hint: hint,
               suggestions: suggestions,
               marks: marks,
@@ -199,6 +204,7 @@ class _BoardPainter extends CustomPainter {
   _BoardPainter({
     required this.board,
     required this.lastMove,
+    required this.lastMoveEmphasis,
     required this.hint,
     required this.suggestions,
     required this.marks,
@@ -210,6 +216,7 @@ class _BoardPainter extends CustomPainter {
 
   final GoBoard board;
   final Move? lastMove;
+  final bool lastMoveEmphasis;
   final (int, int)? hint;
   final List<BoardSuggestionMark>? suggestions;
   final List<BoardMark>? marks;
@@ -314,6 +321,26 @@ class _BoardPainter extends CustomPainter {
           ? Colors.white70
           : GoColors.pineDark;
       canvas.drawCircle(center, cell * 0.15, Paint()..color = markerColor);
+
+      // 最新一手强调：静态双层光环包围最新落子。
+      if (lastMoveEmphasis) {
+        canvas.drawCircle(
+          center,
+          cell * 0.48,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = cell * 0.07
+            ..color = GoColors.wood.withValues(alpha: 0.9),
+        );
+        canvas.drawCircle(
+          center,
+          cell * 0.36,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = cell * 0.05
+            ..color = GoColors.pine,
+        );
+      }
     }
 
     // AI 建议标记（P2 启用）
@@ -544,6 +571,7 @@ class _BoardPainter extends CustomPainter {
   bool shouldRepaint(_BoardPainter oldDelegate) =>
       oldDelegate.board != board ||
       oldDelegate.lastMove != lastMove ||
+      oldDelegate.lastMoveEmphasis != lastMoveEmphasis ||
       oldDelegate.hint != hint ||
       oldDelegate.suggestions != suggestions ||
       !listEquals(oldDelegate.marks, marks) ||

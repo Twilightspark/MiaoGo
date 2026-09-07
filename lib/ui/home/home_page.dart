@@ -19,6 +19,7 @@ import 'package:miaogo/ui/home/daily_session_page.dart';
 import 'package:miaogo/ui/play/ai_setup_page.dart';
 import 'package:miaogo/ui/play/game_page.dart';
 import 'package:miaogo/ui/play/tournament_bracket_page.dart';
+import 'package:miaogo/ui/play/watch_setup_page.dart';
 import 'package:miaogo/ui/record/record_home_page.dart';
 import 'package:miaogo/ui/record/review_page.dart';
 import 'package:miaogo/ui/settings/settings_page.dart';
@@ -99,6 +100,11 @@ class HomePage extends ConsumerWidget {
                             onContinue: () => _push(
                                 context, const TournamentBracketPage()),
                             onSignUp: () => _showSignUpDialog(context, ref),
+                          ),
+                          const SizedBox(height: 14),
+                          _WatchCard(
+                            onStart: () =>
+                                _push(context, const WatchSetupPage()),
                           ),
                           const SizedBox(height: 20),
                           const _SectionLabel('快捷入口'),
@@ -464,6 +470,29 @@ class _CurrentTournamentCard extends StatelessWidget {
         onPressed: onContinue,
         icon: const Icon(Icons.play_arrow, size: 18),
         label: Text(resumable ? '继续' : '比赛'),
+      ),
+    );
+  }
+}
+
+/// 休闲观赛卡：进入观赛设置页，观看两名 AI 棋手自动互弈。
+class _WatchCard extends StatelessWidget {
+  const _WatchCard({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FeatureCard(
+      asset: AppIcon.watch,
+      color: GoColors.pine,
+      title: '休闲观赛',
+      subtitle: 'AI 棋手自动对弈 · 每手约 10 秒',
+      button: FilledButton.icon(
+        key: const ValueKey('home_watch_button'),
+        onPressed: onStart,
+        icon: const Icon(Icons.play_arrow, size: 18),
+        label: const Text('观赛'),
       ),
     );
   }
