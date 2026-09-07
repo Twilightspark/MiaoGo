@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaogo/core/sgf.dart';
-import 'package:miaogo/study/lesson_data.dart';
+import 'package:miaogo/study/joseki_library.dart';
 import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/record/famous_games.dart';
 
@@ -68,15 +68,21 @@ void main() {
     });
   });
 
-  group('定式布局（assets/lessons）', () {
-    test('全部定式 SGF 可解析且含讲解', () async {
-      for (final entry in kJosekiEntries) {
-        final data = await rootBundle.loadString(entry.asset);
-        final game = Sgf.parse(data);
-        expect(game.moves, isNotEmpty, reason: '${entry.asset} 无棋步');
-        expect(game.root.comment, isNotNull,
-            reason: '${entry.asset} 缺根讲解');
+  group('定式库（assets/joseki）', () {
+    test('定式库可加载、全部可回放且能命中常见首手', () async {
+      final library = await JosekiLibrary.load();
+      expect(library.entries.length, greaterThan(3000),
+          reason: '定式条目过少');
+
+      for (final e in library.entries) {
+        final game = Sgf.parse(e.sgf);
+        expect(game.moves, isNotEmpty, reason: '${e.id} 无棋步');
       }
+
+      // 常见第一手（星位）应能命中。
+      final hits = library.matcher.match(['pd']);
+      expect(hits, isNotEmpty, reason: '星位第一手应命中定式');
+      expect(hits.first.matchLen, greaterThanOrEqualTo(1));
     });
   });
 }

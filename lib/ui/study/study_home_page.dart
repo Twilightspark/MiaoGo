@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:miaogo/app_theme.dart';
-import 'package:miaogo/ui/study/joseki_list_page.dart';
-import 'package:miaogo/ui/study/lessons_page.dart';
+import 'package:miaogo/ui/study/beginner_guide_page.dart';
+import 'package:miaogo/ui/study/joseki_practice_page.dart';
 import 'package:miaogo/ui/study/problem_list_page.dart';
 
-/// 功课页：入门基础 / 定式布局 / 死活题。
+/// 功课页：基础规则新手指引 / 定式布局 / 死活题。
 class StudyHomePage extends StatelessWidget {
   const StudyHomePage({super.key});
 
@@ -17,17 +17,17 @@ class StudyHomePage extends StatelessWidget {
         children: [
           _StudyCard(
             icon: Icons.auto_stories,
-            title: '入门基础',
-            subtitle: '围棋规则与术语图文教程',
+            title: '基础规则新手指引',
+            subtitle: '12 步引导式入门，边下边学',
             color: GoColors.pine,
-            onTap: () => _push(context, const LessonsPage()),
+            onTap: () => _push(context, const BeginnerGuidePage()),
           ),
           _StudyCard(
             icon: Icons.stacked_line_chart,
-            title: '定式布局',
-            subtitle: '常见定式序列与讲解',
+            title: '定式练习',
+            subtitle: '落子推荐匹配定式，逐步讲解',
             color: GoColors.wood,
-            onTap: () => _push(context, const JosekiListPage()),
+            onTap: () => _push(context, const JosekiPracticePage()),
           ),
           _StudyCard(
             icon: Icons.grid_on,

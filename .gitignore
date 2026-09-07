@@ -52,3 +52,5 @@ tools/katago-dev/
 
 # 运行时日志（tools 脚本 / 应用写盘，不入仓库）
 gtp_logs/
+
+

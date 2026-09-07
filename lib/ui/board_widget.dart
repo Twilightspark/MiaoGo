@@ -1,9 +1,66 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/board.dart';
 import 'package:miaogo/core/move.dart';
+
+/// 通用棋盘标注样式。
+enum BoardMarkKind {
+  /// 小实心圆点（如标“气”）。
+  dot,
+
+  /// 圆形徽章 + 居中文字（选项数字、✗、字母等）。
+  badge,
+
+  /// 提示圆环。
+  ring,
+}
+
+/// 棋盘通用标注：用于引导/教程在交叉点上做气点、选项、禁点等可视化。
+class BoardMark {
+  const BoardMark.dot({
+    required this.row,
+    required this.col,
+    this.color,
+  })  : kind = BoardMarkKind.dot,
+        text = null;
+
+  const BoardMark.badge({
+    required this.row,
+    required this.col,
+    this.text,
+    this.color,
+  }) : kind = BoardMarkKind.badge;
+
+  const BoardMark.ring({
+    required this.row,
+    required this.col,
+    this.color,
+  })  : kind = BoardMarkKind.ring,
+        text = null;
+
+  final int row;
+  final int col;
+  final BoardMarkKind kind;
+  final String? text;
+
+  /// 覆盖默认色（仅可使用主题令牌色，见 [GoColors]）。
+  final Color? color;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BoardMark &&
+      other.row == row &&
+      other.col == col &&
+      other.kind == kind &&
+      other.text == text &&
+      other.color == color;
+
+  @override
+  int get hashCode => Object.hash(row, col, kind, text, color);
+}
 
 /// 一个棋盘推荐点标注：编号圆点（[isBest] 时用主色，其余用木色）。
 class BoardSuggestionMark {
@@ -33,6 +90,7 @@ class GoBoardWidget extends StatelessWidget {
     this.lastMove,
     this.hint,
     this.suggestions,
+    this.marks,
     this.selected,
     this.selectedColor = PlayerColor.black,
     this.influence,
@@ -49,6 +107,9 @@ class GoBoardWidget extends StatelessWidget {
 
   /// AI 建议候选点（最多 4 个，编号标注，最佳与其余异色）。
   final List<BoardSuggestionMark>? suggestions;
+
+  /// 教程通用标注（气点/选项/禁点/提示环）。
+  final List<BoardMark>? marks;
 
   /// 当前选中的交叉点（两步落子第一步）。
   final (int, int)? selected;
@@ -98,6 +159,7 @@ class GoBoardWidget extends StatelessWidget {
               lastMove: lastMove,
               hint: hint,
               suggestions: suggestions,
+              marks: marks,
               selected: selected,
               selectedColor: selectedColor,
               influence: influence,
@@ -139,6 +201,7 @@ class _BoardPainter extends CustomPainter {
     required this.lastMove,
     required this.hint,
     required this.suggestions,
+    required this.marks,
     required this.selected,
     required this.selectedColor,
     required this.influence,
@@ -149,6 +212,7 @@ class _BoardPainter extends CustomPainter {
   final Move? lastMove;
   final (int, int)? hint;
   final List<BoardSuggestionMark>? suggestions;
+  final List<BoardMark>? marks;
   final (int, int)? selected;
   final PlayerColor selectedColor;
   final List<List<double>>? influence;
@@ -268,10 +332,13 @@ class _BoardPainter extends CustomPainter {
       );
     }
 
+    // 教程通用标注（气点/选项/禁点等）
+    _drawGuideMarks(canvas, margin, cell);
+
     // 推荐点编号标注（最多 4 个；最佳主色、其余木色）
-    final marks = suggestions;
-    if (marks != null && marks.isNotEmpty) {
-      for (final mark in marks) {
+    final suggestionMarks = suggestions;
+    if (suggestionMarks != null && suggestionMarks.isNotEmpty) {
+      for (final mark in suggestionMarks) {
         final center = Offset(
           margin + mark.col * cell,
           margin + mark.row * cell,
@@ -368,6 +435,79 @@ class _BoardPainter extends CustomPainter {
     }
   }
 
+  void _drawGuideMarks(Canvas canvas, double margin, double cell) {
+    final list = marks;
+    if (list == null || list.isEmpty) return;
+    for (final mark in list) {
+      final center = Offset(
+        margin + mark.col * cell,
+        margin + mark.row * cell,
+      );
+      switch (mark.kind) {
+        case BoardMarkKind.dot:
+          final radius = cell * 0.13;
+          final color = mark.color ?? GoColors.pine;
+          canvas.drawCircle(
+            center.translate(0, radius * 0.08),
+            radius,
+            Paint()..color = Colors.black.withValues(alpha: 0.15),
+          );
+          canvas.drawCircle(center, radius, Paint()..color = color);
+          canvas.drawCircle(
+            center,
+            radius,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = math.max(0.6, cell * 0.02)
+              ..color = Colors.white.withValues(alpha: 0.7),
+          );
+        case BoardMarkKind.badge:
+          final radius = cell * 0.24;
+          final color = mark.color ?? GoColors.woodDark;
+          canvas.drawCircle(
+            center.translate(0, radius * 0.1),
+            radius,
+            Paint()..color = Colors.black.withValues(alpha: 0.15),
+          );
+          canvas.drawCircle(center, radius, Paint()..color = color);
+          canvas.drawCircle(
+            center,
+            radius,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = math.max(1, cell * 0.03)
+              ..color = Colors.white.withValues(alpha: 0.55),
+          );
+          final text = mark.text ?? '';
+          final label = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: radius * 1.1,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          label.paint(
+            canvas,
+            Offset(center.dx - label.width / 2, center.dy - label.height / 2),
+          );
+        case BoardMarkKind.ring:
+          final color = mark.color ?? GoColors.pine;
+          canvas.drawCircle(
+            center,
+            cell * 0.22,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = cell * 0.08
+              ..color = color,
+          );
+      }
+    }
+  }
+
   void _drawCoordinates(
       Canvas canvas, double margin, double cell, int n, double boardEdge) {
     final textStyle = const TextStyle(
@@ -406,6 +546,7 @@ class _BoardPainter extends CustomPainter {
       oldDelegate.lastMove != lastMove ||
       oldDelegate.hint != hint ||
       oldDelegate.suggestions != suggestions ||
+      !listEquals(oldDelegate.marks, marks) ||
       oldDelegate.selected != selected ||
       oldDelegate.selectedColor != selectedColor ||
       oldDelegate.influence != influence;

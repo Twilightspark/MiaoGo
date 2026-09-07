@@ -22,8 +22,8 @@ import 'package:miaogo/ui/play/tournament_bracket_page.dart';
 import 'package:miaogo/ui/record/record_home_page.dart';
 import 'package:miaogo/ui/record/review_page.dart';
 import 'package:miaogo/ui/settings/settings_page.dart';
-import 'package:miaogo/ui/study/joseki_list_page.dart';
-import 'package:miaogo/ui/study/lessons_page.dart';
+import 'package:miaogo/ui/study/beginner_guide_page.dart';
+import 'package:miaogo/ui/study/joseki_practice_page.dart';
 import 'package:miaogo/ui/study/problem_list_page.dart';
 
 /// 首页：顶栏（头像/名称/设置）→ 统计卡 → 每日一题 → 快速对弈 → 当前赛事
@@ -525,8 +525,9 @@ class _QuickEntryRow extends StatelessWidget {
   const _QuickEntryRow();
 
   static const _entries = <_QuickEntry>[
-    _QuickEntry(AppIcon.basics, '入门', GoColors.pine, LessonsPage.new),
-    _QuickEntry(AppIcon.joseki, '定式', GoColors.wood, JosekiListPage.new),
+    _QuickEntry(
+        AppIcon.basics, '入门', GoColors.pine, BeginnerGuidePage.new),
+    _QuickEntry(AppIcon.joseki, '定式', GoColors.wood, JosekiPracticePage.new),
     _QuickEntry(
         AppIcon.library, '题库', GoColors.pineDark, ProblemListPage.new),
     _QuickEntry(

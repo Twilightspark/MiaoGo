@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:miaogo/core/joseki.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/study/joseki_library.dart';
 import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/board_widget.dart';
-import 'package:miaogo/ui/study/joseki_list_page.dart';
-import 'package:miaogo/ui/study/lessons_page.dart';
+import 'package:miaogo/ui/study/beginner_guide_page.dart';
+import 'package:miaogo/ui/study/joseki_practice_page.dart';
 import 'package:miaogo/ui/study/problem_list_page.dart';
 import 'package:miaogo/ui/study/problem_page.dart';
 import 'package:miaogo/ui/study/study_home_page.dart';
@@ -16,7 +18,13 @@ void main() {
   Future<List<Override>> baseOverrides() async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    return [sharedPreferencesProvider.overrideWithValue(prefs)];
+    final overrides = <Override>[
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      // 轻量定式库，避免加载全量资产拖慢冒烟测试。
+      josekiLibraryProvider.overrideWith(
+          (ref) async => JosekiLibrary([], JosekiMatcher([]))),
+    ];
+    return overrides;
   }
 
   /// 小型题库（避免全量资产加载拖慢冒烟测试）。
@@ -45,21 +53,30 @@ void main() {
       child: const MaterialApp(home: StudyHomePage()),
     ));
 
-    // 入门基础 → 课程列表。
-    await tester.tap(find.text('入门基础'));
+    // 基础规则新手指引 → 引导页。
+    await tester.tap(find.text('基础规则新手指引'));
     await tester.pumpAndSettle();
-    expect(find.byType(LessonsPage), findsOneWidget);
-    expect(find.text('棋具与基本规则'), findsOneWidget);
+    expect(find.byType(BeginnerGuidePage), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_step_index')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_prev')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_retry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_next')), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // 定式布局 → 定式列表。
-    await tester.tap(find.text('定式布局'));
+    // 定式练习 → 交互练习页。
+    await tester.tap(find.text('定式练习'));
     await tester.pumpAndSettle();
-    expect(find.byType(JosekiListPage), findsOneWidget);
-    expect(find.text('星位·小飞挂·一间跳'), findsOneWidget);
+    expect(find.byType(JosekiPracticePage), findsOneWidget);
+    // 二次返回：首次提示，再次弹退出框，确认回功能首页。
+    await tester.pageBack();
+    await tester.pump();
     await tester.pageBack();
     await tester.pumpAndSettle();
+    expect(find.text('退出定式查询'), findsOneWidget);
+    await tester.tap(find.text('退出'));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudyHomePage), findsOneWidget);
 
     // 死活题 → 列表页（小题库）。
     await tester.tap(find.text('死活题'));

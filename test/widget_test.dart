@@ -75,10 +75,12 @@ void main() {
   testWidgets('点击首页入口跳转对应页面', (tester) async {
     await pumpApp(tester);
 
-    // 快捷入口「入门」→ 入门基础页
+    // 快捷入口「入门」→ 基础规则新手指引页
     await tester.tap(find.byKey(const ValueKey('home_quick_entry_入门')));
     await tester.pumpAndSettle();
-    expect(find.text('入门基础'), findsOneWidget);
+    expect(find.text('基础规则新手指引'), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_step_index')), findsOneWidget);
+
     await tester.pageBack();
     await tester.pumpAndSettle();
 
