@@ -11,7 +11,8 @@ enum GameSource {
   career('生涯'),
   ai('人机'),
   research('研究'),
-  watch('观赛');
+  watch('观赛'),
+  imported('导入');
 
   const GameSource(this.label);
   final String label;
@@ -43,6 +44,8 @@ class GameRecord {
     required this.source,
     required this.moveCount,
     this.tournamentId,
+    this.blackName,
+    this.whiteName,
     this.sgfContent,
   });
 
@@ -61,6 +64,10 @@ class GameRecord {
   /// 生涯大赛 id（无则为空；用于赛事复盘定位本赛事对局）。
   final String? tournamentId;
 
+  /// 双方棋手名（观赛 / 导入棋谱用于展示；个人对局可为空回退 [opponentName]）。
+  final String? blackName;
+  final String? whiteName;
+
   /// SGF 内容（写入文件后不入索引持久化）。
   final String? sgfContent;
 
@@ -77,6 +84,8 @@ class GameRecord {
         source: source,
         moveCount: moveCount,
         tournamentId: tournamentId,
+        blackName: blackName,
+        whiteName: whiteName,
         sgfContent: sgfContent ?? this.sgfContent,
       );
 
@@ -93,6 +102,8 @@ class GameRecord {
         'source': source.name,
         'moveCount': moveCount,
         'tournamentId': tournamentId,
+        'blackName': blackName,
+        'whiteName': whiteName,
       };
 
   factory GameRecord.fromJson(Map<String, dynamic> json) => GameRecord(
@@ -112,6 +123,8 @@ class GameRecord {
             orElse: () => GameSource.ai),
         moveCount: (json['moveCount'] as num?)?.toInt() ?? 0,
         tournamentId: json['tournamentId'] as String?,
+        blackName: json['blackName'] as String?,
+        whiteName: json['whiteName'] as String?,
       );
 }
 

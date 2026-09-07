@@ -1,9 +1,7 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/study/joseki_library.dart';
 import 'package:miaogo/study/problem_engine.dart';
-import 'package:miaogo/ui/record/famous_games.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -53,17 +51,6 @@ void main() {
       for (final d in ProblemDifficulty.values) {
         expect(library.byDifficulty(d), isNotEmpty,
             reason: '${d.label} 组无题目');
-      }
-    });
-  });
-
-  group('历史名谱（assets/famous）', () {
-    test('全部名谱可解析且含棋步', () async {
-      for (final info in kFamousGames) {
-        final data = await rootBundle.loadString(info.asset);
-        final game = Sgf.parse(data);
-        expect(game.moves.length, greaterThanOrEqualTo(40),
-            reason: '${info.asset} 棋步过少');
       }
     });
   });

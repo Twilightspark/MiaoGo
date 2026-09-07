@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/storage/record_store.dart';
-import 'package:miaogo/ui/common/rank_badge.dart';
-import 'package:miaogo/ui/record/famous_games.dart';
+import 'package:miaogo/ui/common/app_icon.dart';
 import 'package:miaogo/ui/record/review_page.dart';
+import 'package:miaogo/ui/record/sgf_import.dart';
 
-/// 棋谱页：个人棋谱 / 历史名谱 / 研究棋谱 三类 Tab。
+/// 棋谱页：观赛保存 + 本地导入的棋谱库，点击进入回看页。
+///
+/// 个人对局（生涯/人机）仍保存在记录库中，但不再于此展示
+/// （回看入口在首页「历史记录」）。历史名谱/研究棋谱入口已移除。
 class RecordHomePage extends ConsumerStatefulWidget {
   const RecordHomePage({super.key});
 
@@ -16,14 +19,14 @@ class RecordHomePage extends ConsumerStatefulWidget {
 }
 
 class _RecordHomePageState extends ConsumerState<RecordHomePage> {
-  /// 读取个人棋谱 SGF 并进入复盘。
+  /// 读取棋谱 SGF 并进入回看。
   Future<void> _openRecord(GameRecord record) async {
     final content =
         await ref.read(recordStoreProvider.notifier).sgfContentOf(record);
     if (!mounted) return;
     if (content == null || content.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该棋谱文件缺失，无法复盘')),
+        const SnackBar(content: Text('该棋谱文件缺失，无法回看')),
       );
       return;
     }
@@ -42,60 +45,71 @@ class _RecordHomePageState extends ConsumerState<RecordHomePage> {
     }
   }
 
-  void _openFamous(FamousGame game) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ReviewPage(game: game.game),
-    ));
+  /// 从本地导入 SGF：解析成功后作为新条目存入列表，不自动跳转。
+  Future<void> _importSgf() async {
+    final content = await ref.read(sgfPickerProvider)();
+    if (!mounted || content == null) return;
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final record = importedRecordFromContent(
+        id: newImportedRecordId(),
+        content: trimmed,
+      );
+      await ref.read(recordStoreProvider.notifier).add(record);
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('棋谱已导入')));
+      }
+    } on FormatException {
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('SGF 文件解析失败')));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final records = ref.watch(recordStoreProvider);
-    final famous = ref.watch(famousGamesProvider);
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('棋谱'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '个人棋谱'),
-              Tab(text: '历史名谱'),
-              Tab(text: '研究棋谱'),
-            ],
+    final library = _libraryOf(records);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('棋谱'),
+        actions: [
+          IconButton(
+            key: const ValueKey('record_import'),
+            tooltip: '导入 SGF',
+            icon: const Icon(Icons.file_open_outlined),
+            onPressed: _importSgf,
           ),
-        ),
-        body: TabBarView(
-          children: [
-            records.isEmpty
-                ? const _EmptyPlaceholder(text: '暂无个人棋谱，对弈后自动保存')
-                : _RecordList(records: records, onTap: _openRecord),
-            _FamousList(
-              famous: famous,
-              onTap: _openFamous,
-            ),
-            const _EmptyPlaceholder(text: '创建空白棋盘自由研究（开发中）'),
-          ],
-        ),
+        ],
       ),
+      body: library.isEmpty
+          ? const _EmptyPlaceholder(text: '暂无棋谱，观赛后保存或点右上角导入')
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: library.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, i) => _RecordCard(
+                record: library[i],
+                onTap: _openRecord,
+              ),
+            ),
     );
   }
-}
 
-class _RecordList extends StatelessWidget {
-  const _RecordList({required this.records, required this.onTap});
-
-  final List<GameRecord> records;
-  final void Function(GameRecord) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: records.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _RecordCard(record: records[i], onTap: onTap),
-    );
+  /// 仅取「观赛保存」与「导入」棋谱，按日期倒序。
+  static List<GameRecord> _libraryOf(List<GameRecord> all) {
+    final list = all
+        .where((r) =>
+            r.source == GameSource.watch || r.source == GameSource.imported)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return list;
   }
 }
 
@@ -108,27 +122,39 @@ class _RecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isWatch = record.source == GameSource.watch;
+    final (black, white) = (record.blackName, record.whiteName);
+    final title = (black != null && white != null)
+        ? '$black 对 $white'
+        : record.opponentName;
+    final date = record.date;
+    final dateText =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
     final resultColor = switch (record.result) {
       GameResult.win => GoColors.pine,
       GameResult.loss => GoColors.textSecondary,
       GameResult.draw => GoColors.wood,
       GameResult.abandoned => GoColors.textSecondary,
     };
-    final date = record.date;
-    final dateText =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
       child: ListTile(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: RankBadge(rankIndex: record.opponentRank, size: 22),
+        leading: AppIconTile(
+          asset: isWatch ? AppIcon.watch : AppIcon.record,
+          color: isWatch ? GoColors.pine : GoColors.wood,
+          tile: 40,
+          iconSize: 22,
+        ),
         title: Text(
-          record.opponentName,
+          title,
           style:
               theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           '$dateText · ${record.boardSize} 路 · ${record.rule.label} · '
@@ -139,7 +165,7 @@ class _RecordCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              record.result.label,
+              _resultLabel(record.result),
               style: theme.textTheme.titleMedium?.copyWith(
                 color: resultColor,
                 fontWeight: FontWeight.bold,
@@ -153,63 +179,14 @@ class _RecordCard extends StatelessWidget {
       ),
     );
   }
-}
 
-/// 历史名谱列表（加载中/失败/内容三态）。
-class _FamousList extends StatelessWidget {
-  const _FamousList({required this.famous, required this.onTap});
-
-  final AsyncValue<List<FamousGame>> famous;
-  final void Function(FamousGame) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return famous.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _EmptyPlaceholder(text: '名谱加载失败：$e'),
-      data: (games) => games.isEmpty
-          ? const _EmptyPlaceholder(text: '暂无内置名谱')
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: games.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final g = games[i];
-                return Card(
-                  elevation: 0,
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    leading: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: GoColors.woodContainer,
-                      child: const Icon(Icons.emoji_events,
-                          color: GoColors.wood),
-                    ),
-                    title: Text(
-                      g.info.title,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      '${g.blackName} 对 ${g.whiteName}'
-                      '${g.result.isEmpty ? '' : ' · ${g.result}'}'
-                      '${g.date.isEmpty ? '' : ' · ${g.date}'}\n${g.info.subtitle}',
-                      style: theme.textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right, size: 18),
-                    onTap: () => onTap(g),
-                  ),
-                );
-              },
-            ),
-    );
-  }
+  /// 观赛 / 导入棋谱按棋盘视角呈现胜负（黑方胜 → 黑胜）。
+  static String _resultLabel(GameResult r) => switch (r) {
+        GameResult.win => '黑胜',
+        GameResult.loss => '白胜',
+        GameResult.draw => '和棋',
+        GameResult.abandoned => '未下完',
+      };
 }
 
 class _EmptyPlaceholder extends StatelessWidget {
@@ -226,7 +203,14 @@ class _EmptyPlaceholder extends StatelessWidget {
         children: [
           Icon(Icons.filter_none, size: 64, color: theme.colorScheme.outline),
           const SizedBox(height: 12),
-          Text(text, style: theme.textTheme.bodyMedium),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
         ],
       ),
     );

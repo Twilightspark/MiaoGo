@@ -920,6 +920,10 @@ class _PlayerInfo extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (isTurn && alignEnd) ...[
+                    const _ThinkingTag(),
+                    const SizedBox(width: 6),
+                  ],
                   Flexible(
                     child: Text(
                       name,
@@ -932,7 +936,7 @@ class _PlayerInfo extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (isTurn) ...[
+                  if (isTurn && !alignEnd) ...[
                     const SizedBox(width: 6),
                     const _ThinkingTag(),
                   ],

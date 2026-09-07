@@ -6,10 +6,9 @@ import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/storage/settings_store.dart';
-import 'package:miaogo/storage/user_store.dart';
 import 'package:miaogo/ui/play/watch_game_page.dart';
 
-/// 休闲观赛设置页：棋手等级 / 棋盘尺寸 / 对弈规则 → 开始观赛。
+/// 休闲观赛设置页：棋手等级 / 棋盘尺寸 / 对弈规则 / 棋手落子时间 → 开始观赛。
 ///
 /// 两名本地 KataGo 棋手将自动互弈，用户仅旁观；布局参考「快速匹配」设置页。
 class WatchSetupPage extends ConsumerStatefulWidget {
@@ -20,17 +19,25 @@ class WatchSetupPage extends ConsumerStatefulWidget {
 }
 
 class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
+  /// 棋手落子时间选项（秒；0 = 立即落子）。
+  static const List<int> _moveTimeOptions = [0, 3, 5, 8, 10, 15];
+
   late int _difficulty;
   late BoardSize _boardSize;
   late GoRule _rule;
+
+  /// 当前选择的棋手落子时间（秒），默认「立即」（0 秒）。
+  late int _moveSeconds;
 
   @override
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    _difficulty = ref.read(userProfileProvider).rankIndex;
+    // 默认棋手等级为 9 段（休闲观赛最高棋力）。
+    _difficulty = RankSystem.kTotalRanks - 1;
     _boardSize = settings.boardSize;
     _rule = settings.rule;
+    _moveSeconds = 0;
   }
 
   void _start() {
@@ -40,9 +47,13 @@ class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
         rule: _rule,
         komi: _rule.defaultKomi,
         rankIndex: _difficulty,
+        minMoveGap: Duration(seconds: _moveSeconds),
       ),
     ));
   }
+
+  static String _moveTimeLabel(int seconds) =>
+      seconds == 0 ? '立即' : '$seconds秒';
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +99,14 @@ class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
             selected: _rule,
             onChanged: (v) => setState(() => _rule = v),
             labelOf: (v) => v.label,
+          ),
+          const SizedBox(height: 16),
+          const _SectionLabel('棋手落子时间'),
+          _PillChoice<int>(
+            values: _moveTimeOptions,
+            selected: _moveSeconds,
+            onChanged: (v) => setState(() => _moveSeconds = v),
+            labelOf: _moveTimeLabel,
           ),
           const SizedBox(height: 16),
           _buildStartArea(theme),

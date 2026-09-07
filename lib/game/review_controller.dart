@@ -112,7 +112,7 @@ class ReviewState {
 /// 复盘控制器：加载棋谱、逐步回放、试下。
 ///
 /// 每次状态变化按「重放建盘」重建棋盘（captures/打劫与历史一致），
-/// 与对局悔棋同模式；棋盘以 `superko: false` 建盘，避免历史名谱的
+/// 与对局悔棋同模式；棋盘以 `superko: false` 建盘，避免外部导入/观赛棋谱的
 /// 旧规则着法被位置超劫误拦。试下为临时行棋，不写回棋谱/历史。
 class ReviewController extends Notifier<ReviewState?> {
   @override

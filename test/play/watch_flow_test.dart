@@ -97,6 +97,17 @@ Future<void> pumpApp(WidgetTester tester) async {
 }
 
 void main() {
+  /// 从首页进入观赛设置页；pace 可选「立即/3秒/5秒/8秒/10秒/15秒」，
+  /// 测试默认不点选落子时间（默认「立即」），需要慢节奏时再点选。
+  Future<void> goSetup(WidgetTester tester, {String? pace}) async {
+    await tester.tap(find.byKey(const ValueKey('home_watch_button')));
+    await tester.pumpAndSettle();
+    if (pace != null && pace != '立即') {
+      await tester.tap(find.text(pace));
+      await tester.pumpAndSettle();
+    }
+  }
+
   testWidgets('首页观赛入口 → 休闲观赛设置页渲染', (tester) async {
     await pumpApp(tester);
 
@@ -108,6 +119,7 @@ void main() {
     expect(find.text('棋手等级'), findsOneWidget);
     expect(find.text('棋盘尺寸'), findsOneWidget);
     expect(find.text('对弈规则'), findsOneWidget);
+    expect(find.text('棋手落子时间'), findsOneWidget);
     expect(find.byKey(const ValueKey('watch_rank_0')), findsOneWidget);
     expect(find.byKey(const ValueKey('watch_start_button')), findsOneWidget);
     expect(find.text('开始观赛'), findsOneWidget);
@@ -115,8 +127,10 @@ void main() {
     expect(find.byType(BackButton), findsNothing);
   });
 
-  testWidgets('开始观赛：AI 互弈自动走子并终局，退出不保存返回首页', (tester) async {
+  testWidgets('默认配置（9段·立即）：开始观赛自动互弈快速终局，退出不保存回首页',
+      (tester) async {
     await pumpApp(tester);
+    // 默认不调整任何配置，直接开始观赛。
     await tester.tap(find.byKey(const ValueKey('home_watch_button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('watch_start_button')));
@@ -126,14 +140,11 @@ void main() {
     expect(find.byType(GoBoardWidget), findsOneWidget);
     expect(find.byKey(const ValueKey('watch_analysis')), findsOneWidget);
     expect(find.byKey(const ValueKey('watch_exit')), findsOneWidget);
-    expect(find.text('第 0 手'), findsOneWidget);
 
-    // 每手展示间隔 10 秒：黑(第1手) / 白停一手 / 黑停一手 → 终局。
-    await tester.pump(const Duration(seconds: 12));
+    // 默认「立即」落子：AI 自动互弈快速推进并终局。
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 11));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 11));
+    await tester.pump();
     await tester.pumpAndSettle();
 
     // 终局弹窗：胜负信息 + 保存/退出。
@@ -147,7 +158,7 @@ void main() {
     expect(find.byType(GoBoardWidget), findsNothing);
     expect(find.byKey(const ValueKey('home_watch_button')), findsOneWidget);
 
-    // 未保存：个人棋谱为空。
+    // 未保存：棋谱库为空。
     final homeCtx = tester.element(
         find.byKey(const ValueKey('home_watch_button')));
     final records =
@@ -155,18 +166,20 @@ void main() {
     expect(records, isEmpty);
   });
 
-  testWidgets('终局「保存到棋谱」写入个人棋谱并回首页', (tester) async {
+  testWidgets('选 3 秒落子节奏：AI 互弈自动走子并终局，保存到棋谱回首页',
+      (tester) async {
     await pumpApp(tester);
-    await tester.tap(find.byKey(const ValueKey('home_watch_button')));
-    await tester.pumpAndSettle();
+    await goSetup(tester, pace: '3秒');
     await tester.tap(find.byKey(const ValueKey('watch_start_button')));
     await tester.pumpAndSettle();
+    expect(find.text('第 0 手'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 12));
+    // 每手间隔 3 秒：黑(第1手) / 白停一手 / 黑停一手 → 终局。
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 11));
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 11));
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('watch_result_save')), findsOneWidget);
@@ -193,6 +206,67 @@ void main() {
 
     // 冲刷首页保存提示 SnackBar 计时器。
     await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('连按两次返回：首次仅提示，再次返回弹提前终止确认', (tester) async {
+    await pumpApp(tester);
+    await goSetup(tester, pace: '3秒');
+    await tester.tap(find.byKey(const ValueKey('watch_start_button')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsOneWidget);
+
+    // 首次返回：仅提示，不弹窗。
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('提前终止观赛'), findsNothing);
+    expect(find.text('再按一次返回可提前终止观赛并回到首页'), findsOneWidget);
+
+    // 紧随第二次返回：弹提前终止确认。
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('提前终止观赛'), findsOneWidget);
+
+    // 取消：留在观赛页。
+    await tester.tap(find.byKey(const ValueKey('watch_abort_cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsOneWidget);
+    expect(find.text('提前终止观赛'), findsNothing);
+
+    // 顶栏「退出」直接回首页（不保存）。
+    await tester.tap(find.byKey(const ValueKey('watch_exit')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsNothing);
+    expect(find.byKey(const ValueKey('home_watch_button')), findsOneWidget);
+
+    // 冲刷提示 SnackBar 与在途自动行棋计时器。
+    await tester.pump(const Duration(seconds: 12));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('连按两次返回：确认提前终止退出回首页（不保存）', (tester) async {
+    await pumpApp(tester);
+    await goSetup(tester, pace: '3秒');
+    await tester.tap(find.byKey(const ValueKey('watch_start_button')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsOneWidget);
+
+    // 首次返回：仅提示；第二次返回：弹确认。
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('提前终止观赛'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('提前终止观赛'), findsOneWidget);
+
+    // 确认退出 → 回首页（不保存）。
+    await tester.tap(find.byKey(const ValueKey('watch_abort_confirm')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoBoardWidget), findsNothing);
+    expect(find.byKey(const ValueKey('home_watch_button')), findsOneWidget);
+
+    // 冲刷提示 SnackBar 与在途自动行棋计时器。
+    await tester.pump(const Duration(seconds: 12));
     await tester.pumpAndSettle();
   });
 }

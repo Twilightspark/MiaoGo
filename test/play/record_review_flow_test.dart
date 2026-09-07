@@ -5,9 +5,9 @@ import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
-import 'package:miaogo/ui/record/famous_games.dart';
 import 'package:miaogo/ui/record/record_home_page.dart';
 import 'package:miaogo/ui/record/review_page.dart';
+import 'package:miaogo/ui/record/sgf_import.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 假记录仓库：跳过 path_provider 落盘（widget 测试中平台通道不可用）。
@@ -23,9 +23,48 @@ class _FakeRecordStore extends RecordStore {
   Future<String?> sgfContentOf(GameRecord r) async => r.sgfContent;
 }
 
-GameRecord _seedRecord() => GameRecord(
-      id: 'r1',
+const _watchSgf = '(;GM[1]FF[4]SZ[9]RU[chinese]KM[7.5]PB[喵喵]PW[旺旺]'
+    'RE[B+2.5];B[dd];W[ee];B[ff])';
+const _importSgf = '(;GM[1]SZ[19]RU[Chinese]KM[7.5]PB[AlphaGo]PW[Lee Sedol]'
+    'DT[2016-03-09]RE[W+R];B[pd];W[dd];B[dp];W[pp])';
+
+GameRecord _watchSeed() => GameRecord(
+      id: 'w1',
       date: DateTime(2026, 8, 1),
+      opponentName: '喵喵 对 旺旺',
+      opponentRank: 8,
+      result: GameResult.win,
+      boardSize: 9,
+      rule: GoRule.chinese,
+      komi: 7.5,
+      sgfPath: '',
+      source: GameSource.watch,
+      moveCount: 3,
+      blackName: '喵喵',
+      whiteName: '旺旺',
+      sgfContent: _watchSgf,
+    );
+
+GameRecord _importSeed() => GameRecord(
+      id: 'i1',
+      date: DateTime(2026, 8, 2),
+      opponentName: 'AlphaGo 对 Lee Sedol',
+      opponentRank: 0,
+      result: GameResult.loss,
+      boardSize: 19,
+      rule: GoRule.chinese,
+      komi: 7.5,
+      sgfPath: '',
+      source: GameSource.imported,
+      moveCount: 4,
+      blackName: 'AlphaGo',
+      whiteName: 'Lee Sedol',
+      sgfContent: _importSgf,
+    );
+
+GameRecord _hiddenAiSeed() => GameRecord(
+      id: 'a1',
+      date: DateTime(2026, 7, 1),
       opponentName: 'AI · 10级',
       opponentRank: 8,
       result: GameResult.win,
@@ -40,11 +79,48 @@ GameRecord _seedRecord() => GameRecord(
           ';B[dd];W[ee];B[ff])',
     );
 
+GameRecord _hiddenCareerSeed() => GameRecord(
+      id: 'c1',
+      date: DateTime(2026, 7, 2),
+      opponentName: '生涯对手',
+      opponentRank: 18,
+      result: GameResult.loss,
+      boardSize: 13,
+      rule: GoRule.korean,
+      komi: 6.5,
+      sgfPath: '',
+      source: GameSource.career,
+      moveCount: 2,
+      sgfContent:
+          '(;GM[1]SZ[13]RU[korean]KM[6.5]PB[对手]PW[棋手]RE[W+R]'
+          ';B[dd];W[ee])',
+    );
+
 void main() {
   Future<List<Override>> baseOverrides() async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     return [sharedPreferencesProvider.overrideWithValue(prefs)];
+  }
+
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    List<Override> overrides = const [],
+    List<GameRecord>? seeds,
+  }) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    final list = [...overrides];
+    if (seeds != null) {
+      list.add(recordStoreProvider.overrideWith(
+          () => _FakeRecordStore(List.of(seeds))));
+    }
+    await tester.pumpWidget(ProviderScope(
+      overrides: list,
+      child: const MaterialApp(home: RecordHomePage()),
+    ));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('复盘页渲染：逐步跳转 / 手数 / 试下点目 / 双停手终局', (tester) async {
@@ -123,54 +199,66 @@ void main() {
     expect(find.text('第 4 手'), findsOneWidget);
   });
 
-  testWidgets('个人棋谱点击进入复盘', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-    final overrides = await baseOverrides();
-    overrides.add(recordStoreProvider.overrideWith(
-        () => _FakeRecordStore([_seedRecord()])));
+  testWidgets('棋谱页仅展示观赛/导入棋谱，点击进入回看', (tester) async {
+    await pumpPage(tester,
+        seeds: [
+          _watchSeed(),
+          _importSeed(),
+          _hiddenAiSeed(),
+          _hiddenCareerSeed(),
+        ]);
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: overrides,
-      child: const MaterialApp(home: RecordHomePage()),
-    ));
+    // 观赛与导入条目展示。
+    expect(find.text('喵喵 对 旺旺'), findsOneWidget);
+    expect(find.text('AlphaGo 对 Lee Sedol'), findsOneWidget);
+    // 结果按棋盘视角：黑胜（观赛）/ 白胜（导入 W+R）。
+    expect(find.text('黑胜'), findsOneWidget);
+    expect(find.text('白胜'), findsOneWidget);
+
+    // 个人对局不出现在本页。
+    expect(find.text('AI · 10级'), findsNothing);
+    expect(find.text('生涯对手'), findsNothing);
+
+    // 点击观赛条目进入回看页。
+    await tester.tap(find.text('喵喵 对 旺旺'));
     await tester.pumpAndSettle();
-
-    expect(find.text('AI · 10级'), findsOneWidget);
-    await tester.tap(find.text('AI · 10级'));
-    await tester.pumpAndSettle();
-
-    // 复盘页出现。
     expect(find.byType(ReviewPage), findsOneWidget);
     expect(find.byKey(const ValueKey('review_next')), findsOneWidget);
   });
 
-  testWidgets('历史名谱 Tab 渲染内置名局', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+  testWidgets('导入 SGF：解析成功保存列表并提示，不自动跳转', (tester) async {
     final overrides = await baseOverrides();
-    // 用内嵌数据替代资产加载（真实资产由 assets_validation_test 覆盖）。
-    overrides.add(famousGamesProvider.overrideWith((ref) async => [
-          FamousGame(
-            info: kFamousGames.first,
-            game: Sgf.parse('(;GM[1]SZ[19]PB[AlphaGo]PW[Lee Sedol]'
-                'DT[2016]RE[B+R];B[dd];W[ee];B[ff])'),
-          ),
-        ]));
+    overrides.add(sgfPickerProvider.overrideWithValue(() async => _importSgf));
+    await pumpPage(tester, overrides: overrides);
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: overrides,
-      child: const MaterialApp(home: RecordHomePage()),
-    ));
+    // 初始为空态。
+    expect(find.textContaining('暂无棋谱'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('record_import')));
+    await tester.pump();
+    // 让真实事件循环完成记录落库（path_provider 无宿主实现被 store 容错）。
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('历史名谱'));
+    expect(find.text('棋谱已导入'), findsOneWidget);
+    expect(find.text('AlphaGo 对 Lee Sedol'), findsOneWidget);
+    expect(find.textContaining('导入 ·'), findsOneWidget);
+    // 仅保存不跳转回看。
+    expect(find.byType(ReviewPage), findsNothing);
+  });
+
+  testWidgets('导入无效 SGF：提示失败且不入列表', (tester) async {
+    final overrides = await baseOverrides();
+    overrides.add(
+        sgfPickerProvider.overrideWithValue(() async => '(;GM[1]'));
+    await pumpPage(tester, overrides: overrides);
+
+    await tester.tap(find.byKey(const ValueKey('record_import')));
     await tester.pumpAndSettle();
 
-    // 内置名谱条目加载。
-    expect(find.text('AlphaGo 对 李世石 第 1 局'), findsOneWidget);
-    expect(find.textContaining('AlphaGo 对 Lee Sedol'), findsOneWidget);
+    expect(find.text('SGF 文件解析失败'), findsOneWidget);
+    expect(find.textContaining('暂无棋谱'), findsOneWidget);
+    expect(find.byType(ReviewPage), findsNothing);
   });
 }

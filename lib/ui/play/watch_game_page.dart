@@ -23,8 +23,9 @@ import 'package:miaogo/ui/common/winrate_panel.dart';
 ///
 /// - 顶栏仅「实时分析」与「退出（不保存）」两个按钮。
 /// - 顶部为双方棋手卡（随机名 + 等级 + 提子数 + 思考中标识），中部棋盘
-///   （每手展示间隔至少 [kWatchMinMoveGap]，最新落子额外高亮提醒），
+///   （每手展示间隔 [minMoveGap]，默认 [kWatchMinMoveGap]，最新落子额外高亮提醒），
 ///   底部为双方胜率曲线面板。
+/// - 系统返回需**连按两次**才弹出「提前终止观赛」确认（防止误触直接退出）。
 /// - 终局弹窗展示胜负并给出「保存到棋谱 / 退出」选择；退出不写任何记录。
 class WatchGamePage extends ConsumerStatefulWidget {
   const WatchGamePage({
@@ -51,6 +52,7 @@ class WatchGamePage extends ConsumerStatefulWidget {
 }
 
 /// 每手最小展示间隔（不足该时长会等待补齐，防止观众来不及反应）。
+/// 观赛设置页可按「棋手落子时间」覆盖；未指定时沿用本默认值。
 const Duration kWatchMinMoveGap = Duration(seconds: 10);
 
 /// 观赛「领地分析」单局面搜索预算（大模型，短促即可，避免影响落子节奏）。
@@ -82,6 +84,9 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
 
   bool _resultDialogShown = false;
   bool _engineDialogShown = false;
+
+  /// 上次系统返回时间（连按两次返回判定）。
+  DateTime? _lastBackAt;
 
   KataGoMoveProvider? _lastProvider;
 
@@ -254,6 +259,54 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  /// 系统返回拦截：本页禁止返回；对局结束后直接退出（由终局弹窗决定去留），
+  /// 进行中须约 2 秒内**连按两次返回**才弹「提前终止观赛」确认。
+  void _handleBack() {
+    final s = ref.read(watchControllerProvider);
+    if (s.finished) {
+      _exitWatch();
+      return;
+    }
+    final now = DateTime.now();
+    final last = _lastBackAt;
+    _lastBackAt = now;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      unawaited(_confirmAbort());
+    } else {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('再按一次返回可提前终止观赛并回到首页'),
+          duration: Duration(milliseconds: 1200),
+        ));
+    }
+  }
+
+  /// 提前终止观赛确认：确认后作废在途行棋并回首页（不保存、不入记录）。
+  Future<void> _confirmAbort() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('提前终止观赛'),
+        content: const Text('是否提前终止本局观赛并回到首页？\n本局不会被保存。'),
+        actions: [
+          TextButton(
+            key: const ValueKey('watch_abort_cancel'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const ValueKey('watch_abort_confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('退出观赛'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) _exitWatch();
+  }
+
   Future<void> _handleEngineError(Object error) async {
     if (_engineDialogShown) return;
     _engineDialogShown = true;
@@ -358,6 +411,8 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
       sgfPath: '',
       source: GameSource.watch,
       moveCount: s.moveCount,
+      blackName: s.blackName,
+      whiteName: s.whiteName,
       sgfContent: Sgf.build(
         size: s.boardSize,
         rules: s.rule.name,
@@ -384,7 +439,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     return PopScope<Object?>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _exitWatch();
+        if (!didPop) _handleBack();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -553,6 +608,10 @@ class _PlayerInfo extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (isTurn && alignEnd) ...[
+                    const _ThinkingTag(),
+                    const SizedBox(width: 6),
+                  ],
                   Flexible(
                     child: Text(
                       name,
@@ -565,7 +624,7 @@ class _PlayerInfo extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (isTurn) ...[
+                  if (isTurn && !alignEnd) ...[
                     const SizedBox(width: 6),
                     const _ThinkingTag(),
                   ],
