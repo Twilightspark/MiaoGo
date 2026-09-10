@@ -8,6 +8,7 @@ import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/study/daily_problems.dart';
 import 'package:miaogo/ui/common/avatar.dart';
 import 'package:miaogo/ui/common/slide_route.dart';
 import 'package:miaogo/ui/settings/edit_name_page.dart';
@@ -154,6 +155,7 @@ class SettingsPage extends ConsumerWidget {
       ref.read(userProfileProvider.notifier).reset();
       ref.read(careerControllerProvider.notifier).reset();
       ref.read(pendingGameStoreProvider.notifier).clear();
+      ref.read(dailyStoreProvider.notifier).reset();
     }
   }
 
@@ -183,6 +185,7 @@ class SettingsPage extends ConsumerWidget {
       ref.read(checkinStoreProvider.notifier).reset();
       ref.read(problemStoreProvider.notifier).reset();
       ref.read(pendingGameStoreProvider.notifier).clear();
+      ref.read(dailyStoreProvider.notifier).reset();
     }
   }
 

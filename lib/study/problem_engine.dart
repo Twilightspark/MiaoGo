@@ -6,10 +6,12 @@ import 'package:miaogo/core/board.dart';
 import 'package:miaogo/core/move.dart';
 import 'package:miaogo/core/sgf.dart';
 
-/// 死活题难度分级。
+/// 答题尝试上限：用满后展示正解并判为做错。
+const int kMaxProblemAttempts = 3;
+
+/// 死活题难度分级（三档）。
 enum ProblemDifficulty {
   beginner('入门'),
-  elementary('初级'),
   intermediate('中级'),
   advanced('高级');
 
@@ -33,7 +35,6 @@ class Problem {
     required this.initial,
     required this.toPlay,
     required this.prompt,
-    required this.explanation,
     required this.mainline,
   });
 
@@ -52,9 +53,6 @@ class Problem {
   /// 题目说明（根节点 `C[]`）。
   final String prompt;
 
-  /// 正解讲解（`C[Correct...]` 或主线末注释）。
-  final String? explanation;
-
   /// 主变化节点链（含根节点）。
   final List<SgfNode> mainline;
 
@@ -63,6 +61,10 @@ class Problem {
         for (final n in mainline.skip(1))
           if (n.move != null) n.move!,
       ];
+
+  /// 正解主线中执子方需要走的步数（防守方应手不计）。
+  int get solutionStepCount =>
+      solutionMoves.where((m) => m.color == toPlay && !m.isPass).length;
 
   static Problem fromGame({
     required String id,
@@ -85,23 +87,6 @@ class Problem {
     final toPlay = game.playerToMove ?? PlayerColor.black;
     final mainline = game.mainline;
 
-    // 讲解：优先 `C[Correct]` 节点注释，否则取主线末注释。
-    String? explanation;
-    for (final n in mainline.skip(1)) {
-      final c = n.comment;
-      if (c != null && c.toLowerCase().contains('correct')) {
-        explanation = c;
-        break;
-      }
-    }
-    if (explanation == null) {
-      for (final n in mainline.reversed) {
-        if (n.comment != null && n.comment!.trim().isNotEmpty) {
-          explanation = n.comment;
-          break;
-        }
-      }
-    }
     return Problem(
       id: id,
       title: title,
@@ -111,7 +96,6 @@ class Problem {
       initial: board,
       toPlay: toPlay,
       prompt: (game.root.comment ?? '').trim(),
-      explanation: explanation,
       mainline: mainline,
     );
   }
@@ -178,6 +162,19 @@ class ProblemSolver {
   GoBoard get board => _board;
   PlayerColor get toPlay => problem.toPlay;
 
+  /// 当前主线进度下标（0 = 初始局面），用于续做恢复。
+  int get progressIndex => _index;
+
+  /// 从当前进度起，执子方还需走出的步数（防守方应手不计）。
+  int get remainingSteps {
+    var count = 0;
+    for (var i = _index + 1; i < problem.mainline.length; i++) {
+      final m = problem.mainline[i].move;
+      if (m != null && m.color == toPlay && !m.isPass) count++;
+    }
+    return count;
+  }
+
   /// 下一个应行的用户手（正解主线中的下一手执子方棋步）。
   Move? get expectedMove {
     final i = _nextUserIndex;
@@ -204,6 +201,21 @@ class ProblemSolver {
     _index = 0;
     attempts = 0;
     solved = false;
+  }
+
+  /// 恢复到主线的第 [index] 个节点（续做），并恢复错误次数 [attempts]。
+  ///
+  /// 通过重放主线重建盘面（含防守方应手），保证与离开时一致。
+  void restore({required int index, int attempts = 0}) {
+    _board = problem.initial.clone(superko: false);
+    final target = index.clamp(0, problem.mainline.length - 1);
+    for (var i = 1; i <= target; i++) {
+      final m = problem.mainline[i].move;
+      if (m != null && !m.isPass) _board.forcePlay(m.color, m.row!, m.col!);
+    }
+    _index = target;
+    this.attempts = attempts;
+    solved = target > 0 && (_terminalCorrect || _nextUserIndex == null);
   }
 
   /// 用户落子判定；[StepOutcome.correct] 表示与正解一致并已推进。

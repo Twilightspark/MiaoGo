@@ -138,7 +138,7 @@ miaogo/
 | `GameRecord` | id、日期、对手名、对手段位、结果、用时、尺寸(9/13/19)、规则、贴目、SGF路径、来源(生涯/人机/观赛/导入)、双方棋手名(观赛/导入展示用) |
 | `Tournament` | id、名称(随机生成)、组别(段位区间)、选手列表(玩家+AI persona)、赛程(3~5 局)、积分表 |
 | `TournamentPlayer` | 名、段位、报名状态、胜负记录 |
-| `Problem` | id、标题、难度(入门/初级/中级/高级)、尺寸、初始局面、目标色、SGF路径、是否已完成 |
+| `Problem` | id、标题、难度(入门/中级/高级)、尺寸、初始局面、目标色、SGF路径、是否已完成 |
 | `AppSettings` | 棋盘风格、棋子风格、棋盘尺寸、规则、贴目、难度映射微调、音效等 |
 | `Difficulty` | rankIndex → (maxVisits, maxTime, temperature, rootNoise, 选点 topK 容错) |
 
@@ -230,7 +230,7 @@ KataGo 在低 visit 下仍远超人类，故弱化需"引擎参数 + 选点容�
 |---|---|---|---|
 | KataGo 二进制 | arm64-v8a，NDK 编译 | 社区包/自编译（另终端） | 否（.gitignore，体积红线） |
 | KataGo 模型 | **b6c96**（级位）+ **b18c384**（段位/分析），均随 APK | katagotraining.org | 否（.gitignore；pubspec 已声明，构建前须存在） |
-| 死活题数据 | 422 题 SGF（gogameguru，含正解分支/`C[Correct]` 讲解/难度） | baduk-study-material 自由共享库整理（**已核对许可**，见 docs/data-sources.md） | 是（`assets/problems/`） |
+| 死活题数据 | 2678 题 SGF（**三档**：入门 1167 / 中级 1222 / 高级 289）：gogameguru 422（CC BY-NC-SA）+ 古典 Gokyo Shumyo 509（公版位置，社区转制 grey，中级）+ Cho Chikun Elementary 887（入门）+ Cho Chikun Intermediate 860（前 2/3 中级、末 1/3 高级，grey，正解为 OGS 社区回放）；Xuanxuan/Hatsuyōron/Cho-Advanced 因无正解/讲解且 KataGo 无法可靠生成而暂缓收录（配方保留，见 docs/data-sources.md） | baduk-study-material 自由共享库 + travisgk/tsumego-pdf（MIT；题目源自 tsumego.tasuki.org、正解 OGS 社区）整理（许可分级见 docs/data-sources.md 与 `assets/problems/sources.json`；重跑管道见 `D:\AI\go\tsumego\`） | 是（`assets/problems/`） |
 | 基础规则新手指引 | 12 步交互引导（数据+引擎） | 自编（`lib/study/beginner_guide.dart`） | 是 |
 | 定式布局 | 常见定式 SGF + 讲解（自编 4 项 + 专业精讲 1 项） | 自编/公开资料整理 | 是（`assets/lessons/`） |
 
@@ -301,7 +301,7 @@ flutter build apk --release --no-tree-shake-icons             # 仅当图标字�
 | **P2 引擎与分析** ✅ | `gtp_client`、`katago_engine`、`analysis`、`difficulty` 27 档映射；实时 ownership 热力图、AI 建议下一步、对局中切换规则 | mock stdout 单测通过；真机可对弈与分析 |
 | **P3 生涯模式** ✅ | `career_controller`（大赛生成/报名/赛程/积分/升降级）；生涯统计；段位徽章 | career 结算单测通过 |
 | **P4 棋谱模块** ✅ | `core/sgf.dart` 完整解析/序列化（树/布子/分支/注释/双字母表容错）；复盘页（回放+势力范围+AI 建议+点目）；**棋谱库仅收观赛保存 + 本地 SGF 导入**，条目点击回看；个人对局在首页「历史记录」回看；历史名谱/研究棋谱入口已下线 | sgf 往返 + review_controller 单测；复盘页可用（导入走 file_picker，见 `ui/record/sgf_import.dart`） |
-| **P5 功课模块** ✅ | `problem_engine`（422 题判定）+ `problem_store` 进度 + 答题页/正解回放/讲解；入门基础与定式布局页面 | problem_engine/problem_store 单测 + 资产校验（422 题可解析可走通） |
+| **P5 功课模块** ✅ | `problem_engine`（初始 422 题判定，2026-09 起**三档**题库 2678 题）+ `problem_store` 进度 + 答题页/正解回放/讲解；入门基础与定式布局页面 | problem_engine/problem_store 单测 + 资产校验（全部题可解析可走通，三档均有题） |
 | **P6 打磨与发布** | 棋盘/棋子风格、棋盘大小、对局中切规则、引擎高级参数；**真机校准难度表**；release 单 arm64 打包；补充文档 | release 包可安装；难度表已校准 |
 
 ## 15. 风险与待确认

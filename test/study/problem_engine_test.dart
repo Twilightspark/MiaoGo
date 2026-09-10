@@ -23,7 +23,7 @@ void main() {
   // qs=(row17,col15), ps=(row17,col14), rs=(row17,col16), os=(row17,col13)
 
   group('Problem 解析', () {
-    test('布子 / 执子方 / 题目说明 / 讲解', () {
+    test('布子 / 执子方 / 题目说明', () {
       final p = _mk(sgf);
       expect(p.boardSize, 19);
       expect(p.toPlay, PlayerColor.black);
@@ -38,21 +38,12 @@ void main() {
       }
       expect(whites, 5);
       expect(blacks, 3);
-      // 讲解取 C[Correct] 节点注释。
-      expect(p.explanation, 'Correct');
       // 正解主线：B[qs] W[ps] B[rs]。
       expect(p.solutionMoves, [
         const Move.point(PlayerColor.black, 17, 15),
         const Move.point(PlayerColor.white, 17, 14),
         const Move.point(PlayerColor.black, 17, 16),
       ]);
-    });
-
-    test('无 C[Correct] 时讲解回退到主线末注释', () {
-      const t = '(;SZ[9]AW[dd]AB[ee];B[cc];W[bb]C[happy end])';
-      final p = _mk(t);
-      expect(p.explanation, 'happy end');
-      expect(p.toPlay, PlayerColor.black);
     });
 
     test('PL 指定白方执子', () {
@@ -137,6 +128,44 @@ void main() {
       expect(solver.attempts, 0);
       expect(solver.board.at(17, 15), isNull);
       expect(solver.expectedMove, const Move.point(PlayerColor.black, 17, 15));
+    });
+
+    test('remainingSteps 随推进递减（仅计执子方）', () {
+      final p = _mk(sgf);
+      final solver = ProblemSolver(p);
+      // 正解主线 3 手：B[qs] W[ps] B[rs]，黑方需走 2 步。
+      expect(p.solutionStepCount, 2);
+      expect(solver.remainingSteps, 2);
+      solver.play(17, 15); // B[qs]，防守 W[ps] 自动应。
+      expect(solver.remainingSteps, 1);
+      solver.play(17, 16); // B[rs]，解出。
+      expect(solver.remainingSteps, 0);
+    });
+
+    test('restore 恢复主线进度与错误次数', () {
+      final p = _mk(sgf);
+      final solver = ProblemSolver(p);
+      solver.play(17, 15); // B[qs]，防守 W[ps] 自动应。
+      final idx = solver.progressIndex;
+
+      final restored = ProblemSolver(p);
+      restored.restore(index: idx, attempts: 2);
+      expect(restored.board.at(17, 15), PlayerColor.black);
+      expect(restored.board.at(17, 14), PlayerColor.white);
+      expect(restored.expectedMove, const Move.point(PlayerColor.black, 17, 16));
+      expect(restored.attempts, 2);
+      expect(restored.solved, isFalse);
+    });
+
+    test('restore 到终点标记已解出', () {
+      final p = _mk(sgf);
+      final solver = ProblemSolver(p);
+      solver.play(17, 15);
+      solver.play(17, 16);
+      final restored = ProblemSolver(p);
+      restored.restore(index: solver.progressIndex);
+      expect(restored.solved, isTrue);
+      expect(restored.board.at(17, 16), PlayerColor.black);
     });
   });
 }

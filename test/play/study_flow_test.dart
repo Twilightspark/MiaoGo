@@ -10,8 +10,6 @@ import 'package:miaogo/ui/board_widget.dart';
 import 'package:miaogo/ui/study/beginner_guide_page.dart';
 import 'package:miaogo/ui/study/joseki_practice_page.dart';
 import 'package:miaogo/ui/study/problem_list_page.dart';
-import 'package:miaogo/ui/study/problem_page.dart';
-import 'package:miaogo/ui/study/study_home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -41,7 +39,56 @@ void main() {
     ]);
   }
 
-  testWidgets('功课页三入口导航', (tester) async {
+  testWidgets('功课页：新手指引与定式练习直接渲染', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    final overrides = await baseOverrides();
+
+    // 基础规则新手指引 → 引导页控件齐全。
+    await tester.pumpWidget(ProviderScope(
+      overrides: overrides,
+      child: const MaterialApp(home: BeginnerGuidePage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guide_step_index')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_prev')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_retry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guide_next')), findsOneWidget);
+
+    // 定式练习：二次返回弹出退出确认框，确认后回宿主页。
+    await tester.pumpWidget(ProviderScope(
+      overrides: overrides,
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const JosekiPracticePage()),
+                ),
+                child: const Text('open_joseki'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open_joseki'));
+    await tester.pumpAndSettle();
+    expect(find.byType(JosekiPracticePage), findsOneWidget);
+    await tester.pageBack();
+    await tester.pump();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('退出定式查询'), findsOneWidget);
+    await tester.tap(find.text('退出'));
+    await tester.pumpAndSettle();
+    expect(find.byType(JosekiPracticePage), findsNothing);
+  });
+
+  testWidgets('题库：作答后状态更新并归类', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -50,86 +97,35 @@ void main() {
 
     await tester.pumpWidget(ProviderScope(
       overrides: overrides,
-      child: const MaterialApp(home: StudyHomePage()),
+      child: const MaterialApp(home: ProblemListPage()),
     ));
-
-    // 基础规则新手指引 → 引导页。
-    await tester.tap(find.text('基础规则新手指引'));
-    await tester.pumpAndSettle();
-    expect(find.byType(BeginnerGuidePage), findsOneWidget);
-    expect(find.byKey(const ValueKey('guide_step_index')), findsOneWidget);
-    expect(find.byKey(const ValueKey('guide_prev')), findsOneWidget);
-    expect(find.byKey(const ValueKey('guide_retry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('guide_next')), findsOneWidget);
-    await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // 定式练习 → 交互练习页。
-    await tester.tap(find.text('定式练习'));
+    // 入门 → 未做 → 进入作答页。
+    await tester.tap(find.text('入门'));
     await tester.pumpAndSettle();
-    expect(find.byType(JosekiPracticePage), findsOneWidget);
-    // 二次返回：首次提示，再次弹退出框，确认回功能首页。
-    await tester.pageBack();
-    await tester.pump();
-    await tester.pageBack();
+    await tester.tap(find.textContaining('未做'));
     await tester.pumpAndSettle();
-    expect(find.text('退出定式查询'), findsOneWidget);
-    await tester.tap(find.text('退出'));
+    await tester.tap(find.text('入门 第 1 题'));
     await tester.pumpAndSettle();
-    expect(find.byType(StudyHomePage), findsOneWidget);
 
-    // 死活题 → 列表页（小题库）。
-    await tester.tap(find.text('死活题'));
-    await tester.pumpAndSettle();
-    expect(find.byType(ProblemListPage), findsOneWidget);
-    expect(find.text('入门 第 1 题'), findsOneWidget);
-  });
-
-  testWidgets('答题页：答对判定并弹出正解讲解', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-    final overrides = await baseOverrides();
-
-    // 9 路单步题：黑走 dd=(3,3) 即解。
-    const sgf = '(;SZ[9]AW[ee][ff]AB[ed][fe]C[Black to play]'
-        ';B[dd]C[Correct 捕获两子])';
-    final problem = Problem.fromGame(
-      id: 'easy-1',
-      title: '入门 第 1 题',
-      difficulty: ProblemDifficulty.beginner,
-      asset: 'assets/problems/x.sgf',
-      game: Sgf.parse(sgf),
-    );
-
-    await tester.pumpWidget(ProviderScope(
-      overrides: overrides,
-      child: MaterialApp(home: ProblemPage(problem: problem)),
-    ));
-    await tester.pump();
-
-    // 棋盘渲染。
-    expect(find.byType(GoBoardWidget), findsOneWidget);
-    expect(find.textContaining('轮到 黑方'), findsOneWidget);
-
-    // 点击 dd=(3,3) 即答对 → 弹出对话框。
+    // 确认落子模式：点 dd=(3,3) 后点「落子」即答对。
     final rect = tester.getRect(find.byType(GoBoardWidget));
-    final n = problem.boardSize;
     final margin = rect.width * 0.06;
-    final cell = (rect.width - rect.width * 0.12) / (n - 1);
-    final center = Offset(
+    final cell = (rect.width - rect.width * 0.12) / (9 - 1);
+    await tester.tapAt(Offset(
       rect.left + margin + 3 * cell,
       rect.top + margin + 3 * cell,
-    );
-    await tester.tapAt(center);
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('落子'));
     await tester.pumpAndSettle();
 
-    expect(find.text('解答正确'), findsOneWidget);
-    expect(find.textContaining('Correct'), findsOneWidget);
-    await tester.tap(find.text('继续'));
+    // 返回类别页：切到「已做」应能看到该题。
+    await tester.pageBack();
     await tester.pumpAndSettle();
-
-    // 已解出状态显示。
-    expect(find.text('已解出'), findsOneWidget);
+    await tester.tap(find.textContaining('已做'));
+    await tester.pumpAndSettle();
+    expect(find.text('入门 第 1 题'), findsOneWidget);
   });
 }

@@ -10,9 +10,11 @@ import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/career_controller.dart';
 import 'package:miaogo/storage/checkin_store.dart';
 import 'package:miaogo/storage/pending_game_store.dart';
+import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:miaogo/study/daily_problems.dart';
+import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/common/app_icon.dart';
 import 'package:miaogo/ui/common/avatar.dart';
 import 'package:miaogo/ui/home/daily_session_page.dart';
@@ -38,17 +40,17 @@ class HomePage extends ConsumerWidget {
     final records = ref.watch(recordStoreProvider);
     final career = ref.watch(careerControllerProvider);
     final checkin = ref.watch(checkinStoreProvider);
-    final daily = ref.watch(todayDailyProgressProvider);
+    final daily = ref.watch(dailyRoundProgressProvider);
     final pendingGames = ref.watch(pendingGameStoreProvider);
     final quickPending = _pendingQuick(pendingGames);
     final careerPending = career.active == null
         ? null
         : _pendingCareer(pendingGames, career.active!.id);
 
-    // 今日 5 题全部解出 → 记录打卡（幂等）。
-    ref.listen<({int solved, int total})>(todayDailyProgressProvider,
-        (prev, next) {
-      if (next.total > 0 && next.solved >= next.total) {
+    // 本轮 5 题全部做过 → 记录打卡（幂等）。
+    ref.listen<({int done, int total, bool complete})>(
+        dailyRoundProgressProvider, (prev, next) {
+      if (next.complete) {
         ref.read(checkinStoreProvider.notifier).markToday();
       }
     });
@@ -77,10 +79,10 @@ class HomePage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 14),
                           _DailyProblemCard(
-                            solved: daily.total == 0 ? 0 : daily.solved,
+                            done: daily.total == 0 ? 0 : daily.done,
                             total: daily.total,
-                            onStart: () =>
-                                _push(context, const DailySessionPage()),
+                            complete: daily.complete,
+                            onStart: () => _openDaily(context, ref),
                           ),
                           const SizedBox(height: 14),
                           _QuickPlayCard(
@@ -154,6 +156,21 @@ class HomePage extends ConsumerWidget {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => GamePage.resume(pending: pending),
     ));
+  }
+
+  /// 进入每日打卡：本轮已完成时先重新抽一轮，再进入。
+  void _openDaily(BuildContext context, WidgetRef ref) {
+    if (ref.read(dailyRoundProgressProvider).complete) {
+      final library = ref.read(problemLibraryProvider).value;
+      if (library != null) {
+        ref.read(dailyStoreProvider.notifier).startNextRound(
+              library: library.problems,
+              rankIndex: ref.read(userProfileProvider).rankIndex,
+              progress: ref.read(problemStoreProvider),
+            );
+      }
+    }
+    _push(context, const DailySessionPage());
   }
 
   void _showSignUpDialog(BuildContext context, WidgetRef ref) {
@@ -371,28 +388,29 @@ class _FeatureCard extends StatelessWidget {
 /// 每日一题：进度 + 开始做题按钮。
 class _DailyProblemCard extends StatelessWidget {
   const _DailyProblemCard({
-    required this.solved,
+    required this.done,
     required this.total,
+    required this.complete,
     required this.onStart,
   });
 
-  final int solved;
+  final int done;
   final int total;
+  final bool complete;
   final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
-    final allDone = total > 0 && solved >= total;
     return _FeatureCard(
       asset: AppIcon.daily,
       color: GoColors.pine,
       title: '每日一题',
-      subtitle: allDone ? '今日完成，明天继续' : '今日进度 $solved/$total',
+      subtitle: complete ? '今日已完成，点击继续练习' : '今日进度 $done/$total',
       button: FilledButton.icon(
         key: const ValueKey('home_daily_start'),
         onPressed: onStart,
         icon: const Icon(Icons.play_arrow, size: 18),
-        label: Text(allDone ? '再练一题' : '做题'),
+        label: Text(complete ? '继续' : '做题'),
       ),
     );
   }

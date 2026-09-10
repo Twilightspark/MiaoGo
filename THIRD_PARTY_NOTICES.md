@@ -85,8 +85,12 @@ For the full license texts of each package, refer to the `LICENSE` file inside t
 
 - **历史名谱（11 局）· Historical games**: `github.com/benjaminmantle/baduk-study-material`
   自由共享棋谱库（AI 时代 + 经典公开档案 CWI/Brouwer）。
-- **死活题（422 题）· Life-and-death problems**: `baduk-study-material`
-  `02-life-and-death/graded/gogameguru-weekly/`（gogameguru 每周一题）。
+- **死活题（2678 题）· Life-and-death problems**: `baduk-study-material`
+  `02-life-and-death/graded/gogameguru-weekly/`（gogameguru 每周一题 422，CC BY-NC-SA）、
+  `02-life-and-death/collections/gokyo-shumyo/`（Gokyo Shumyo 509，古典公版位置·社区转制）；
+  以及 `github.com/travisgk/tsumego-pdf`（MIT）的 Cho Chikun Elementary 887 / Intermediate 860
+  （题目源自 tsumego.tasuki.org、正解为 online-go.com 社区回放；许可状态不明按 grey 处理、
+  被要求即下架）。许可分级与移除方式见 `docs/data-sources.md`。
 - **定式布局 · Joseki**: 自编 + `baduk-study-material` `05-joseki/1-dan-joseki-essentials.sgf`。
 - **入门基础 · Lessons**: 自编图文。
 

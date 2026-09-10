@@ -1,0 +1,55 @@
+{
+ "meta": {
+  "version": 2,
+  "generated": "2026-09-08",
+  "problems_total": 2678,
+  "note": "每题附正解主线（C[Correct] 标记）。三档分级：beginner=入门 / intermediate=中级 / advanced=高级。grey 来源如权利方主张即按仓库承诺下架。Cho 系列题目源自 tsumego.tasuki.org、正解为 OGS 社区回放（见来源说明），许可不明按 grey 处理。"
+ },
+ "sources": [
+  {
+   "key": "gogameguru-weekly",
+   "title_cn": "GoGameGuru 每周一题",
+   "title_en": "GoGameGuru weekly problems",
+   "folders": [
+    "easy",
+    "intermediate",
+    "hard",
+    "other"
+   ],
+   "tier": "cc-by-nc-sa-4.0",
+   "note": "既有 422 题（含正解分支 C[Correct]），CC BY-NC-SA 4.0。三档模型：easy+intermediate→入门，hard→中级，other→高级。",
+   "license_text": "CC BY-NC-SA 4.0",
+   "count": 422
+  },
+  {
+   "key": "gokyo-shumyo",
+   "title_cn": "Gokyo Shumyo（《碁經》古谱死活，1822 年刊本合编）",
+   "title_en": "Gokyo Shumyo",
+   "folder": "gokyo",
+   "tier": "grey-pd-positions",
+   "note": "古典死活题位置属公版；SGF 转制为社区流传（MultiGo FF3 全字母表），源自 baduk-study-material collections/gokyo-shumyo/gokyo shumyo.zip，每条含正解主线（首分支约定）。若权利方主张即按仓库承诺下架。",
+   "license_text": "Public-domain positions; community transcription (grey).",
+   "count": 509
+  },
+  {
+   "key": "cho-elementary",
+   "title_cn": "Cho Chikun《死活辞典·基础》Elementary（900 题）",
+   "title_en": "Cho Chikun Elementary",
+   "folder": "cho-elementary",
+   "tier": "grey-pd-positions",
+   "note": "题目源自 tsumego.tasuki.org（Chih-Chun 收集），正解为 online-go.com 社区逐题回放，编号棋子/空点标记 = 完整交替正解主线（黑先，奇数黑/偶数白）。travisgk/tsumego-pdf（MIT）go-problems.json 同名正文与 PDF 版式核对一致。题目为典型左上角角部死活；每册黑先，全部归入门档。许可状态不明属 grey：被要求即下架。",
+   "license_text": "Position: unclear (tsumego.tasuki.org); solution: OGS community (grey, MIT repo).",
+   "count": 887
+  },
+  {
+   "key": "cho-intermediate",
+   "title_cn": "Cho Chikun《死活辞典·中级》Intermediate（861 题）",
+   "title_en": "Cho Chikun Intermediate",
+   "folder": "cho-intermediate",
+   "tier": "grey-pd-positions",
+   "note": "题目源自 tsumego.tasuki.org，正解为 online-go.com 社区回放（编号标记 = 完整交替正解主线，黑先）。travisgk/tsumego-pdf（MIT）数据。中级卷整体对应中高级题库；卷内难度递进，按题序前 2/3 归中级、末 1/3 归高级。许可状态不明属 grey：被要求即下架。",
+   "license_text": "Position: unclear (tsumego.tasuki.org); solution: OGS community (grey, MIT repo).",
+   "count": 860
+  }
+ ]
+}
