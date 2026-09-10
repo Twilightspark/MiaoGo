@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.7.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.7.1-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -13,14 +13,13 @@
 ## 简介 · Introduction
 
 **喵棋（MiaoGo）** 是一款基于 **Flutter** 开发的安卓围棋对弈应用。AI 对手由 **KataGo** 本地引擎驱动，
-通过控制思考时间与行棋选择参数，构建从 **18 级到 9 段** 共 27 档难度的人机对手；支持中国 / 韩国 / 日本规则，
-可随时查看领地分析与数子结果，并内置生涯对战、历史名谱、死活题与定式等学习内容。
+内置 **Human SL** 模型按段位模仿人类棋风，构建从 **18 级到 9 段** 共 27 档难度的人机对手；支持中国 / 韩国 / 日本规则，
+可随时查看领地分析与数子结果，并内置生涯对战、死活题与定式等学习内容。
 
 **MiaoGo** is an Android Go (Weiqi/Baduk) game built with **Flutter**. Its AI opponents are driven by a
-**local KataGo** engine. By tuning the engine's search budget and move-selection parameters, it provides
+**local KataGo** engine with the **Human SL** model, imitating human play to provide
 **27 ranks from 18 kyu to 9 dan**. It supports Chinese / Korean / Japanese rules, on-demand territory
-analysis and scoring, plus a career tournament mode, historical famous games, life-and-death problems and
-joseki study content.
+analysis and scoring, plus a career tournament mode, life-and-death problems and joseki study content.
 
 ## 功能特性 · Features
 
@@ -38,8 +37,8 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 
 其他核心能力 Core capabilities:
 
-- 🤖 **本地 AI · Local AI**：KataGo 双模型——b6c96 小模型负责 **18级~1级**，b18c384 大模型负责 **1段~9段** 及全部落点分析。Dual-model KataGo: b6c96 (kyu ranks) and b18c384 (dan ranks + all move analysis).
-- 🎯 **27 段位难度 · 27 ranks**：引擎思考量 + 选点容错双轴弱化，低段位也能"像人一样"漏招。Search budget + move-selection tolerance produce human-like mistakes at low ranks.
+- 🤖 **本地 AI · Local AI**：单引擎 KataGo——b18c384 主模型负责全部落点分析，Human SL 模型按段位模仿人类棋风（18级~9段）。Single-engine KataGo: b18c384 for all move analysis, plus the Human SL model imitating human play across ranks.
+- 🎯 **27 段位难度 · 27 ranks**：Human SL 按段位模仿人类棋风，低段位也能"像人一样"漏招。Human SL imitates human play per rank, producing human-like mistakes at low ranks.
 - 🌏 **多规则 · Multi-rules**：中国（数子）/ 韩国 / 日本（数目），对局中可切换。Chinese/Korean/Japanese rules, switchable mid-game.
 - 📊 **实时形势判断 · Live territory**：`kata-analyze` ownership 热力图 + AI 建议，任意时刻可用。Ownership heatmap & AI hints at any time.
 - 🎮 **生涯大赛 · Career tournaments**：随机赛事、8 人单败淘汰、积分升降级、AI 对手段位动态匹配。Random tournaments, 8-player single elimination, rank progression.
@@ -63,7 +62,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 | AI 引擎 · Engine | **KataGo** (GTP, Android NDK 交叉编译，原生库 `libkatago.so` 子进程方式运行) |
 | 状态管理 · State | **flutter_riverpod**（Notifier/Provider，无 codegen） |
 | 本地存储 · Storage | `shared_preferences` + `path_provider`（SGF 与 JSON 索引） |
-| 目标平台 · Platform | Android，minSdk 21+，**arm64-v8a** |
+| 目标平台 · Platform | Android，minSdk 24，发布 **arm64-v8a + armeabi-v7a**（按 ABI 拆分 APK） |
 | 围棋规则 · Rules | 中国 / 韩国 / 日本，Komi 随规则联动 |
 
 ## 项目结构 · Project Structure
@@ -115,8 +114,10 @@ miaogo/
 # 2) 开发机验证用 Windows 版二进制（可选）
 ./tools/fetch_katago.ps1 -Mode WindowsDev
 
-# 3) 发布包用 Android 原生库 libkatago.so（NDK 交叉编译，另终端执行）
-./tools/fetch_katago.ps1 -NdkPath <你的NDK路径>
+# 3) 发布包用 Android 原生库 libkatago.so（NDK 交叉编译，另终端执行；按 ABI 各编译一份）
+foreach ($abi in @('arm64-v8a','armeabi-v7a')) {
+  ./tools/fetch_katago.ps1 -NdkPath <你的NDK路径> -Abi $abi -OutDir "android/app/src/main/jniLibs/$abi"
+}
 ```
 
 ### 构建与验证 · Build & test
@@ -125,14 +126,18 @@ miaogo/
 flutter pub get
 flutter analyze          # 静态检查，无 error
 flutter test             # 单元 + widget 测试
-flutter build apk --release --target-platform android-arm64   # 单 ABI 发布包
+flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64   # 按 ABI 拆分发布包
 ```
 
 ## 路线图 · Roadmap
 
 详细变更见 [`CHANGELOG.md`](CHANGELOG.md)
 
-### 1.7.0（当前 · Current）
+### 1.7.1（当前 · Current）
+
+对手棋力对齐改用 KataGo Human SL（单引擎），发布包支持 arm64-v8a + armeabi-v7a（详见 `CHANGELOG.md`）。
+
+### 1.7.0
 
 功课题库扩至 2678 题并分入门/中级/高级三档，答题与对弈页面重构（详见 `CHANGELOG.md`）。
 

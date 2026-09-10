@@ -8,6 +8,44 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.7.1] - 2026-09-07
+
+对手棋力对齐改用 KataGo Human SL（单引擎，覆盖 18级~9段），发布包同时覆盖 arm64-v8a + armeabi-v7a。
+
+### Added
+
+- **Human SL 对手段位对齐**：新增 `b18c384nbt-humanv0.bin.gz`（KataGo v1.15.0，约 95MB），
+  经 `-human-model` 与主模型同进程加载；`lib/engine/difficulty.dart` 重写为 27 档
+  `humanSLProfile`（`rank_18k`~`rank_9d`）映射，级位纯人类策略、段位逐步混入搜索。
+- **分析/对弈参数隔离**：`KataGoEngine.applyAnalysisParams()` 在实时分析前恢复中性参数与
+  近无限搜索上限，保证热力图/胜率/数子仍是超人类评估；新增 `searchAnalysis()` 供一次性分析搜索。
+
+### Changed
+
+- **单引擎架构**：移除 b6c96 小模型与双引擎选型；`EngineController` 单实例，
+  `danEngineStatusProvider`/`kataGoDanEngineProvider` 保留为同源别名兼容 UI。
+- `KataGoMoveProvider` 直接采用引擎 `play <move>`（含 pass/resign），移除 Dart 侧 top-K 温度采样；
+  `GameController` 支持 AI 认输收尾。
+- `tools/fetch_models.ps1` 改为拉取 b18c384 + humanv0；`gtp.cfg` 追加 Human SL 基线。
+- APK 体积随 human 模型增大（约 +95MB gz）。
+- **Android OpenCL（GPU）后端：已实现构建、运行回退 Eigen**。`tools/fetch_katago.ps1`
+  新增 `-Backend OpenCL`（NDK 交叉编译 + 厂商 OpenCL 转发 shim，可正常产出二进制），
+  但 Android 以子进程方式运行引擎时处于 linker `(default)` namespace，**无法访问 `/vendor`
+  的 OpenCL 驱动**，引擎启动即失败（`exit=-6`，日志：`library "/vendor/lib64/libOpenCL.so"
+  ... is not accessible for the namespace "(default)"`）。故 Android 仍随 APK 打包 Eigen 后端；
+  若要启用 GPU，需改为 in-process（JNI）加载引擎（见 `AGENTS.md §8`）。脚本的 OpenCL 模式保留备用。
+- **多 ABI 发布**：`release.yml` 改为按 ABI 循环编译 KataGo 原生库（`fetch_katago.ps1 -Abi`），
+  并以 `flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64`
+  产出 `app-armeabi-v7a-release.apk` 与 `app-arm64-v8a-release.apk`，Release 附件与 artifact 走通配上传。
+  （Flutter 3.38 已移除 32 位 x86，故不覆盖 x86。）
+- **构建脚本**：`fetch_katago.ps1` 修复 `llvm-strip` 宿主机路径硬编码（Linux runner 此前跳过瘦身），
+  并为 armeabi-v7a 显式启用 NEON（`-mfpu=neon`）以免 Eigen 退化为标量。
+- `.gitignore` 的 `jniLibs` 规则泛化为 `jniLibs/*/libkatago.so`；文档同步多 ABI 打包说明。
+
+### Removed
+
+- b6c96 小模型不再随 APK 打包。
+
 ## [1.7.0] - 2026-09-07
 
 功课题库大幅扩充至 2678 题（入门 / 中级 / 高级三档），并重构答题与对弈相关页面。
@@ -194,6 +232,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.7.1]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.7.1
 [1.7.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.5.0
