@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.6.0-4C8B70)
+![Version](https://img.shields.io/badge/version-1.7.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -33,7 +33,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 | **首页 · Home** | 顶部用户区（头像 / 名称 / 设置）+ 统计卡（打卡天数 / 对局数量 / 棋手积分 / 当前棋力）+ 统一功能卡（每日一题 · 快速对弈 · 赛事生涯）+ 无边框快捷入口 + 懒加载历史记录。Sticky user header (avatar / name / settings) + stats card + unified feature cards (daily problem / quick play / career tournament) + quick entries + lazy-loaded game & tournament history. |
 | **对弈 · Play** | **生涯模式**（随机大赛、积分升降级）与**人机模式**（自由选段位 / 尺寸 / 规则 / 落子方式）。共用对局页：顶部选手卡片、两步/双击落子、悔棋、停手、实时 ownership 热力图、胜率走势曲线、保存续弈与弃局、终局数子、保存棋谱。Career tournament mode & Free-play mode. Shared game page: player cards, two-step/double-tap placement, undo, pass, real-time ownership heatmap, black-winrate curve, save/resume & abandon, scoring, SGF save. |
 | **棋谱 · Records** | 个人棋谱 / 历史名谱 / 研究棋谱；复盘（历史对弈回看）：逐步回放、逐手黑方胜率曲线、任意手位看势力范围，可进入「试下」自由推演（悔棋 / 停手 / 点目），双返回或退出直达首页。Personal games, 11 historical famous games, and review with per-move black-winrate curve, territory view, and a free try-play mode. |
-| **功课 · Study** | 入门基础（规则 / 术语图文）、定式布局（SGF 序列 + 讲解）、**422 道死活题**（答题判定 + 正解讲解 + 进度）。Lessons, joseki patterns, and 422 graded life-and-death problems with solutions & progress. |
+| **功课 · Study** | 入门基础（规则 / 术语图文）、定式布局（SGF 序列 + 讲解）、**2678 道死活题**（入门/中级/高级三档，答题判定 + 正解讲解 + 进度）。Lessons, joseki patterns, and 2,678 graded life-and-death problems (three tiers) with solutions & progress. |
 | **设置 · Settings** | 棋盘 / 棋子风格、棋盘大小（9 / 13 / 19）、对弈规则（中 / 韩 / 日，贴目联动）、音效、关于与数据清除。Board & stone styles, board size, ruleset, sound, about & data reset. |
 
 其他核心能力 Core capabilities:
@@ -43,7 +43,7 @@ The app uses a **5-tab bottom navigation** (Home / Play / Records / Study / Sett
 - 🌏 **多规则 · Multi-rules**：中国（数子）/ 韩国 / 日本（数目），对局中可切换。Chinese/Korean/Japanese rules, switchable mid-game.
 - 📊 **实时形势判断 · Live territory**：`kata-analyze` ownership 热力图 + AI 建议，任意时刻可用。Ownership heatmap & AI hints at any time.
 - 🎮 **生涯大赛 · Career tournaments**：随机赛事、8 人单败淘汰、积分升降级、AI 对手段位动态匹配。Random tournaments, 8-player single elimination, rank progression.
-- 📚 **内置功课 · Built-in study**：422 死活题 + 名谱 + 定式，全部离线可用。All offline.
+- 📚 **内置功课 · Built-in study**：2678 死活题（三档）+ 名谱 + 定式，全部离线可用。All offline.
 
 ## 截图 · Screenshots
 
@@ -73,7 +73,7 @@ miaogo/
 ├── android/                  # Flutter Android 宿主（KataGo jniLibs 原生库）
 ├── assets/
 │   ├── katago/               # KataGo 引擎资源（模型/配置，.gitignore 排除，构建前须 fetch）
-│   ├── problems/             # 422 道死活题 SGF
+│   ├── problems/             # 2678 道死活题 SGF（三档：入门/中级/高级）
 │   ├── famous/               # 11 局历史名谱 SGF
 │   ├── lessons/              # 定式布局 SGF + 讲解
 │   ├── icons/                # 首页 SVG 语义色图标（做题/对弈/竞赛/入门/定式/题库/棋谱/历史/比赛）
@@ -132,7 +132,11 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 
 详细变更见 [`CHANGELOG.md`](CHANGELOG.md)
 
-### 1.6.0（当前 · Current）
+### 1.7.0（当前 · Current）
+
+功课题库扩至 2678 题并分入门/中级/高级三档，答题与对弈页面重构（详见 `CHANGELOG.md`）。
+
+### 1.6.0
 
 新增 SGF 棋谱导入，并以导入取代内置历史名谱模块（详见 `CHANGELOG.md`）。
 
@@ -202,7 +206,10 @@ flutter build apk --release --target-platform android-arm64   # 单 ABI 发布�
 内嵌棋谱 / 功课数据来源与许可记录于 [`docs/data-sources.md`](docs/data-sources.md)：
 
 - **历史名谱（11 局）**：`baduk-study-material` 自由共享棋谱库（AI 时代 + 经典公开档案）
-- **死活题（422 题）**：`gogameguru` 每周一题（经 `baduk-study-material` 整理）
+- **死活题（2678 题，三档）**：`gogameguru` 每周一题 422（经 `baduk-study-material` 整理）
+  + 古典《碁経》Gokyo Shumyo 509（中级）+ Cho Chikun Elementary 887（入门）/ Intermediate 860
+  （前 2/3 中级、末 1/3 高级；经 `travisgk/tsumego-pdf` MIT 转制，题目源自 tsumego.tasuki.org、
+  正解为 online-go.com 社区回放，grey 许可见 data-sources）
 - **定式布局**：自编 + 公开资料整理
 - **入门基础**：自编图文
 

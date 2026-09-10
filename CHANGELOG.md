@@ -8,6 +8,28 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.7.0] - 2026-09-07
+
+功课题库大幅扩充至 2678 题（入门 / 中级 / 高级三档），并重构答题与对弈相关页面。
+
+### Added
+
+- **题库扩至 2678 题（三档）**：入门 1167 / 中级 1222 / 高级 289。新增来源——古典《碁経》
+  Gokyo Shumyo 509（中级）、Cho Chikun Elementary 887（入门）/ Intermediate 860
+  （前 2/3 中级、末 1/3 高级）；含正解分支与讲解，`assets/problems/` 按来源目录组织，
+  许可分级记录于 `assets/problems/sources.json` 与 `docs/data-sources.md`。
+- **功课重构**：新增题目分类页（`problem_category_page.dart`）与答题页
+  （`problem_solve_page.dart` / `problem_solve_view.dart`），取代旧的功课首页 / 答题页；
+  每日一题改为按轮次抽取与判定（`daily_problems.dart`），完成后可一键开启下一轮。
+- **清理与测试**：移除旧的 `play_home_page` / `career_page` / `study_home_page` / `problem_page`
+  入口页；新增锦标赛对阵流程测试（`tournament_bracket_flow_test.dart`）与每日一题测试
+  （`daily_problems_test.dart`）。
+
+### Changed
+
+- `problem_engine.dart` / `daily_problems.dart` 适配三档题库与题目来源；`problem_list_page.dart`
+  与 `board_widget.dart` 随新答题交互调整；资产校验测试覆盖全部 2678 题可解析、可走通。
+
 ## [1.6.0] - 2026-09-07
 
 新增 SGF 棋谱导入，并以导入取代内置「历史名谱」模块。
@@ -172,6 +194,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.7.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.4.0
