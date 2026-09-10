@@ -98,10 +98,6 @@ Future<void> pumpToGame(WidgetTester tester) async {
         engineStatusProvider.overrideWith(
           () => _ReadyEngineController(_scriptedEngine()),
         ),
-        // 分析走大模型（P3 双模型）：测试中同样以脚本化引擎就绪。
-        danEngineStatusProvider.overrideWith(
-          () => _ReadyEngineController(_scriptedEngine()),
-        ),
       ],
       child: const MiaoGoApp(),
     ),

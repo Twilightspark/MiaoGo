@@ -11,17 +11,15 @@ import 'package:path_provider/path_provider.dart';
 /// 二进制随 APK 作为原生库打进 nativeLibraryDir（android/app/src/main/jniLibs/arm64-v8a/libkatago.so），
 /// 模型/配置仍为 Flutter assets（数据文件，解压到应用目录即可读取）。
 const String kEngineBinaryLib = 'libkatago.so';
-const String kB6c96ModelAsset =
-    'assets/katago/kata1-b6c96-s175395328-d26788732.txt.gz';
 const String kB18c384ModelAsset =
     'assets/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz';
+const String kHumanModelAsset = 'assets/katago/b18c384nbt-humanv0.bin.gz';
 const String kEngineConfigAsset = 'assets/katago/gtp.cfg';
 
-/// 模型规格：一个引擎实例绑定一个模型（P3 双模型）。
+/// 引擎模型规格（单引擎架构，P6）。
 ///
-/// - [kEngineModelKyu]（b6c96 小模型）：18级~1级（rankIndex 0..17）人机对弈。
-/// - [kEngineModelDan]（b18c384 大模型）：1段~9段（rankIndex 18..26）人机对弈，
-///   以及落点推荐/实时分析等全部分析功能。
+/// 一个引擎实例绑定 b18c384 主模型（落点分析）+ Human SL 模型
+/// （`-human-model`，负责 18级~9段拟人对手）。
 class EngineModel {
   const EngineModel({
     required this.name,
@@ -43,16 +41,9 @@ class EngineModel {
   int get hashCode => name.hashCode;
 }
 
-/// 小模型（级位对弈）：18级~1级。
-const EngineModel kEngineModelKyu = EngineModel(
-  name: 'b6c96',
-  modelAsset: kB6c96ModelAsset,
-  modelFile: 'kata1-b6c96-s175395328-d26788732.txt.gz',
-);
-
-/// 大模型（段位对弈 + 全部落点分析）：1段~9段。
+/// 单引擎：b18c384 主模型（落点分析）+ Human SL 模型（拟人对手）。
 const EngineModel kEngineModelDan = EngineModel(
-  name: 'b18c384',
+  name: 'b18c384+human',
   modelAsset: kB18c384ModelAsset,
   modelFile: 'kata1-b18c384nbt-s9996604416-d4316597426.bin.gz',
 );
@@ -73,17 +64,18 @@ Future<String> nativeLibraryDir() async {
   return path;
 }
 
-/// 单个引擎实例（一个模型）的加载状态控制器。
+/// 单个引擎实例（b18c384 主模型 + Human SL 模型）的加载状态控制器。
 ///
-/// 同一 [EngineController] 类承载两个实例：
-/// - [engineStatusProvider] = 小模型（b6c96，核心，级位对弈）；
-/// - [danEngineStatusProvider] = 大模型（b18c384，段位对弈与分析）。
-/// 各自独立生命周期，加载/失败互不影响。
+/// 单引擎架构（P6）：对弈与分析共用同一实例，避免重复加载大模型；
+/// [danEngineStatusProvider] 等旧名保留为同源别名，兼容既有 UI。
 class EngineController extends Notifier<EngineStatus> {
-  /// 默认构造绑定小模型（保持公开无参，测试子类 super() 不受影响）。
-  EngineController({this.model = kEngineModelKyu});
+  /// 默认构造绑定单引擎（保持公开无参，测试子类 super() 不受影响）。
+  EngineController({this.model = kEngineModelDan, this.withHumanModel = true});
 
   final EngineModel model;
+
+  /// 是否加载 Human SL 模型（拟人对手所需）。
+  final bool withHumanModel;
 
   KataGoEngine? _engine;
 
@@ -114,6 +106,7 @@ class EngineController extends Notifier<EngineStatus> {
       _engine = await KataGoEngine.launch(
         binaryPath: paths.binary,
         modelPath: paths.model,
+        humanModelPath: paths.humanModel,
         configPath: paths.config,
         // 可写 CWD：KataGo 会把 gtp_logs 建在 CWD 下（Android 进程 CWD=/ 不可写，
         // 会导致启动即退出，见 katago_engine.dart）。
@@ -132,6 +125,12 @@ class EngineController extends Notifier<EngineStatus> {
         rule: settings.rule,
         komi: settings.komi,
       );
+      // 自检 Human SL 模型已加载（否则段位对弈参数无法生效）。
+      if (withHumanModel && !await _engine!.hasHumanModel()) {
+        throw const EngineResourceException(
+            'Human SL 模型未生效（kata-get-models 未报告 usesHumanSLProfile=true）。'
+            '请确认 assets/katago/b18c384nbt-humanv0.bin.gz 已随 APK 打包。');
+      }
       state = EngineStatus.ready;
     } catch (e) {
       var msg = e.toString();
@@ -176,8 +175,14 @@ class EngineController extends Notifier<EngineStatus> {
   }
 
   /// 从 assets 解压模型/配置到应用目录（幂等，跳过已存在）；二进制走原生库目录。
-  Future<({String binary, String model, String config, String engineDir})>
-      _prepareAssets() async {
+  Future<
+      ({
+        String binary,
+        String model,
+        String? humanModel,
+        String config,
+        String engineDir
+      })> _prepareAssets() async {
     final dir = await getApplicationSupportDirectory();
     final engineDir = Directory('${dir.path}/katago');
     await engineDir.create(recursive: true);
@@ -186,6 +191,10 @@ class EngineController extends Notifier<EngineStatus> {
         await _extractIfMissing(engineDir, model.modelFile, model.modelAsset);
     final config =
         await _extractIfMissing(engineDir, 'gtp.cfg', kEngineConfigAsset);
+    final humanModel = withHumanModel
+        ? await _extractIfMissing(
+            engineDir, 'b18c384nbt-humanv0.bin.gz', kHumanModelAsset)
+        : null;
 
     final binary = File('${await nativeLibraryDir()}/$kEngineBinaryLib');
     if (!await binary.exists()) {
@@ -194,7 +203,8 @@ class EngineController extends Notifier<EngineStatus> {
           '请运行 tools/fetch_katago.ps1 编译后放入 '
           'android/app/src/main/jniLibs/arm64-v8a/。');
     }
-    return (binary: binary.path, model: modelFile.path, config: config.path,
+    return (binary: binary.path, model: modelFile.path,
+        humanModel: humanModel?.path, config: config.path,
         engineDir: engineDir.path);
   }
 
@@ -218,42 +228,29 @@ class EngineResourceException implements Exception {
   String toString() => message;
 }
 
-/// 引擎加载状态。
+/// 引擎加载状态（单引擎：b18c384 主模型 + Human SL 模型）。
 final engineStatusProvider = NotifierProvider<EngineController, EngineStatus>(
     () => EngineController());
 
-/// 大模型（b18c384）加载状态：段位对弈与落点分析的门槛。
-final danEngineStatusProvider =
-    NotifierProvider<EngineController, EngineStatus>(
-        () => EngineController(model: kEngineModelDan));
+/// 兼容别名：单引擎架构下，段位门槛与分析门槛同源。
+final danEngineStatusProvider = engineStatusProvider;
 
-/// 已就绪的小模型引擎（未就绪返回 null）。
+/// 已就绪的引擎（未就绪返回 null）。
 final kataGoEngineProvider = Provider<KataGoEngine?>((ref) {
   final status = ref.watch(engineStatusProvider);
   if (status != EngineStatus.ready) return null;
   return ref.read(engineStatusProvider.notifier).engine;
 });
 
-/// 已就绪的大模型引擎（未就绪返回 null）。
-final kataGoDanEngineProvider = Provider<KataGoEngine?>((ref) {
-  final status = ref.watch(danEngineStatusProvider);
-  if (status != EngineStatus.ready) return null;
-  return ref.read(danEngineStatusProvider.notifier).engine;
-});
+/// 兼容别名：单引擎架构下与 [kataGoEngineProvider] 同源。
+final kataGoDanEngineProvider = kataGoEngineProvider;
 
-/// 引擎版选点器（双模型，P3）：按对手段位自动选型。
-///
-/// - rankIndex < 18（18级~1级）→ 小模型 b6c96；
-/// - rankIndex >= 18（1段~9段）→ 大模型 b18c384。
-/// 小模型就绪即返回非空（核心门槛）；大模型未就绪时由 UI 按难度拦截，
-/// 不走到这里（[KataGoMoveProvider.chooseMove] 对缺失引擎抛错兜底）。
+/// 引擎版选点器（单引擎）：按对手段位下发 Human SL 参数。
 final kataGoMoveProvider = Provider<KataGoMoveProvider?>((ref) {
-  final kyu = ref.watch(kataGoEngineProvider);
-  if (kyu == null) return null;
-  final dan = ref.watch(kataGoDanEngineProvider);
+  final engine = ref.watch(kataGoEngineProvider);
+  if (engine == null) return null;
   return KataGoMoveProvider(
-    kyuEngine: kyu,
-    danEngine: dan,
+    engine: engine,
     rule: ref.read(settingsProvider).rule,
     komi: ref.read(settingsProvider).komi,
   );

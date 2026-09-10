@@ -132,16 +132,12 @@ class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
     );
   }
 
-  /// 开始观赛按钮（按棋手等级选型引擎）：
-  /// 级位（<18）走小模型 b6c96，段位（>=18）走大模型 b18c384，
-  /// 对应模型就绪才可开始；加载中禁用+进度，失败显示错误+重试。
+  /// 开始观赛按钮（单引擎：对弈与分析共用，引擎就绪即可开始）。
+  /// 加载中禁用+进度，失败显示错误+重试。
   Widget _buildStartArea(ThemeData theme) {
-    final isDan = _difficulty >= RankSystem.kNumKyuRanks;
-    final statusProvider =
-        isDan ? danEngineStatusProvider : engineStatusProvider;
-    final status = ref.watch(statusProvider);
-    final notifier = ref.read(statusProvider.notifier);
-    final modelLabel = isDan ? '大模型' : '引擎';
+    final status = ref.watch(engineStatusProvider);
+    final notifier = ref.read(engineStatusProvider.notifier);
+    const modelLabel = '引擎';
     switch (status) {
       case EngineStatus.ready:
         return FilledButton(

@@ -86,9 +86,6 @@ Future<void> pumpApp(WidgetTester tester) async {
         engineStatusProvider.overrideWith(
           () => _ReadyEngineController(_scriptedEngine()),
         ),
-        danEngineStatusProvider.overrideWith(
-          () => _ReadyEngineController(_scriptedEngine()),
-        ),
       ],
       child: const MiaoGoApp(),
     ),

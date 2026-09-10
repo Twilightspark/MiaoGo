@@ -35,10 +35,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 ## 2. KataGo Neural Networks（神经网络模型）
 
-- 来源 Source: <https://katagotraining.org/>（kata1 系列）
+- 来源 Source: <https://katagotraining.org/>（kata1 系列）与 KataGo v1.15.0 release（Human SL）
 - 模型 Networks bundled:
-  - `kata1-b6c96-s175395328-d26788732.txt.gz`（级位对弈 · kyu ranks）
-  - `kata1-b18c384nbt-s9996604416-d4316597426.bin.gz`（段位对弈与分析 · dan ranks & analysis）
+  - `kata1-b18c384nbt-s9996604416-d4316597426.bin.gz`（落点分析与搜索 · analysis & search）
+  - `b18c384nbt-humanv0.bin.gz`（18级~9段 Human SL 拟人对手 · human-like play，KataGo v1.15.0）
 - 许可 License: [KataGo Neural Network License](https://katagotraining.org/network_license/)（MIT 式，允许商业使用）
 
 ```
@@ -62,7 +62,19 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## 3. Flutter 与 Dart 依赖 · Flutter/Dart Dependencies
+## 3. OpenCL 运行库（未随发布包分发）· OpenCL Runtime (not distributed)
+
+`tools/fetch_katago.ps1 -Backend OpenCL` 会（可选地）使用以下组件，但 Android 端
+OpenCL 子进程不可用（见 `AGENTS.md §8`），**发布包当前不包含它们**，仅构建期可能拉取：
+
+- **OpenCL Headers**（Khronos Group，仅构建期使用）：
+  <https://github.com/KhronosGroup/OpenCL-Headers> · 许可 License: Apache-2.0。
+- **厂商 OpenCL 转发 shim `shim.c`**：源码取自
+  <https://github.com/ChuiShui233/KataGO_Android> 的 `build-tools/opencl-shim/shim.c`
+  （构建时按固定 commit 拉取）。该上游仓库**未附许可证**；若将来随包分发，
+  须先向作者确认授权或改用自研/官方 ICD loader。
+
+## 4. Flutter 与 Dart 依赖 · Flutter/Dart Dependencies
 
 | 依赖 Dependency | 版本 Version | 许可 License |
 |---|---|---|
@@ -78,7 +90,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 各依赖完整版权与许可文本以其包内 `LICENSE` 文件为准（`pubspec.lock` 锁定版本）。
 For the full license texts of each package, refer to the `LICENSE` file inside the corresponding package.
 
-## 4. 内嵌棋谱 / 功课数据 · Bundled Go Data
+## 5. 内嵌棋谱 / 功课数据 · Bundled Go Data
 
 内嵌 `assets/famous`、`assets/problems`、`assets/lessons` 与代码内嵌课程数据来源及许可，
 详见 [`docs/data-sources.md`](docs/data-sources.md)：

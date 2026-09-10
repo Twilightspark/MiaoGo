@@ -19,7 +19,7 @@
 | 交互协议 | GTP（KataGo GTP engine，stdin/stdout）；分析用 `kata-analyze` |
 | 状态管理 | **flutter_riverpod**（Notifier/Provider，不用 codegen），禁止混用其他库 |
 | 本地存储 | `shared_preferences`（用户/设置）+ `path_provider` 应用目录存 SGF 与 JSON 索引；**不引 sqflite** |
-| 目标平台 | Android，minSdk 21+，优先 arm64-v8a（兼容 armeabi-v7a / x86_64） |
+| 目标平台 | Android，minSdk 24，发布出 arm64-v8a + armeabi-v7a（x86 32 位已被 Flutter 移除） |
 | 围棋规则 | 中国（数子）、韩国、日本（数目）等，对局中可切换 |
 
 ## 2. 功能总览（五大页面）
@@ -62,7 +62,7 @@
 
 1. **棋盘尺寸**：9 路（默认）、13 路、19 路可选；棋盘绘制与坐标正确（SGF 坐标 a1…t19，跳过 i）。
 2. **AI 对手**：本地 KataGo，通过 GTP 交互；落子、提子、打劫、让子均由引擎规则保证。
-3. **难度分级**：**27 段位**（18级~1级~1段~9段）映射引擎参数（思考量 + 选点方式），见 §8。
+3. **难度分级**：**27 段位**（18级~1级~1段~9段）映射 Human SL 画像与搜索参数，见 §7。
 4. **规则支持**：中国 / 韩国 / 日本，Komi、贴目随规则变化；引擎侧用 `kgs-rules` 同步；对局中可切换。
 5. **终局分析**：随时（不只终局后）调用 `kata-analyze` 获取 `ownership`（领地热力图，每点 -1~1）
    与 `territory`（领地划分），叠加在棋盘上；数子/数目结果面板展示。
@@ -96,7 +96,7 @@ miaogo/
 │   │   ├── katago_engine.dart    # 引擎生命周期：解压资源、拉起进程、重建
 │   │   ├── gtp_client.dart       # GTP 协议收发（子进程 stdin/stdout，超时处理）
 │   │   ├── analysis.dart         # kata-analyze 请求与 ownership/territory/topMoves 解析
-│   │   └── difficulty.dart       # 段位 → 引擎参数 + 选点容错（27 档映射，§8）
+│   │   └── difficulty.dart       # 段位 → Human SL 参数（27 档映射，§7）
 │   ├── game/
 │   │   ├── game_controller.dart  # 对局状态机：人机/生涯共用、顺序、回合、悔棋
 │   │   ├── match_engine.dart     # AI 决策调度（isolate 隔离，不阻塞 UI；失败降级 Dart 规则 AI）
@@ -140,7 +140,7 @@ miaogo/
 | `TournamentPlayer` | 名、段位、报名状态、胜负记录 |
 | `Problem` | id、标题、难度(入门/中级/高级)、尺寸、初始局面、目标色、SGF路径、是否已完成 |
 | `AppSettings` | 棋盘风格、棋子风格、棋盘尺寸、规则、贴目、难度映射微调、音效等 |
-| `Difficulty` | rankIndex → (maxVisits, maxTime, temperature, rootNoise, 选点 topK 容错) |
+| `Difficulty` | rankIndex → (humanSLProfile, maxVisits, maxTime, piklLambda, 选点温度, 根探索) |
 
 ## 6. 段位体系与生涯模式（大赛制）
 
@@ -169,45 +169,58 @@ miaogo/
    负 ×`clamp(1−0.2d, 0, 2)`；对手低自己 5 档获胜不得分、高自己 5 档失利不扣分。
    和棋/弃局 0 分。生涯模式经同一加权逻辑不在此重复结算。
 
-## 7. 难度分级设计（27 段位 → 引擎参数 + 选点容错）
+## 7. 难度分级设计（27 段位 → Human SL）
 
-KataGo 在低 visit 下仍远超人类，故弱化需"引擎参数 + 选点容错"双轴：
+采用 KataGo **Human SL 模型**（`b18c384nbt-humanv0.bin.gz`，经 `-human-model` 加载）按段位
+模仿人类棋风，替代原"低 visit + 选点容错"弱化方案（纯引擎棋力地板过高、低段位不真实）。
 
-- **引擎参数**（`kata-set-param <name> <value>` 运行时改参）：对 `i=0..26` 做分段线性插值：
+- **画像映射**：`rankIndex 0..26` → `humanSLProfile`：级位 `rank_18k`~`rank_1k`、
+  段位 `rank_1d`~`rank_9d`（见 `lib/engine/difficulty.dart`）。
+- **引擎参数**（`kata-set-params` 运行时批量下发，按档位缓存）：连续参数在锚点档间分段线性插值：
 
-| 索引 i（段位） | 参考 maxVisits | 参考 maxTime | temperature | rootNoise | 选点 topK 容错 |
+| 索引 i（段位） | 参考 maxVisits | 参考 maxTime | piklLambda | 根探索 | 说明 |
 |---|---|---|---|---|---|
-| 0（18级） | 1~5 | 0.1s | 1.5 | 高 | 很大（常抽次优/再次优） |
-| 8（10级） | 20 | 0.4s | 0.8 | 高 | 大 |
-| 17（1级） | 60 | 0.6s | 0.5 | 中 | 中 |
-| 18（1段） | 150 | 1.2s | 0.3 | 低 | 低 |
-| 22（5段） | 500 | 2.5s | 0.15 | 很低 | 很低 |
-| 26（9段） | 2000+ | 6s+ | <0.05 | 无 | 无（取最优） |
+| 0（18级） | 30 | 0.5s | 1e8 | 0 | 纯人类策略（visits 仅用于 pass/认输判断） |
+| 8（10级） | 30 | 0.5s | 1e8 | 0 | 同上 |
+| 17（1级） | 50 | 0.8s | 1e7 | 0 | 仍近纯人类 |
+| 18（1段） | 120 | 1.2s | 0.5 | 0.4 | 轻度混入搜索 |
+| 22（5段） | 350 | 2.5s | 0.08 | 0.8 | 搜索增强为主 |
+| 26（9段） | 700 | 5s | 0.03 | 0.8 | 原始 human 网不足 9d，靠搜索补强 |
 
-- **选点容错（Dart 侧，强于纯引擎弱化）**：`kata-analyze` 取 top-N 候选，按温度加权采样"次优/再次优"落子；
-  段位越低 N 越大、随机性越强，用于制造低段位的明显漏招，突破纯引擎的棋力地板。
-- **真机校准**：开发模式菜单内置"校准工具"，可边对弈边调 visits/temperature/topK 并即时生效，
-  产出每个段位的实测参数表并写回默认配置（必须真机校准，访问次数与硬件线程强相关，以耗时预算为硬约束）。
-- 其他可调参数：`forcedPlayouts`/`forcedTime`（强制最少思考）、`rootPessimism`（弱化）、
-  `policyInitAreaTemperature`（早期多样度）、`cpuct`。让子/让先可由 `boardsize`+规则或减 visit 近似，勿破坏引擎状态。
+- **选点方式**：直接采用引擎 `play <move>`（Human SL 已按段位人类棋风选点），
+  不再做 Dart 侧 top-K 加权采样；`piklLambda` 越小越靠搜索增强棋力。
+- **对弈/分析互斥**：Human SL 会关闭 `useNoisePruning/useUncertainty/subtreeValueBiasFactor/
+  useLcbForSelection` 等增强搜索强度的特性；实时分析前调用 `applyAnalysisParams()` 恢复默认
+  中性参数与近无限搜索上限，保证热力图/胜率/数子仍是超人类评估。
+- **真机校准**：开发模式菜单内置"校准工具"，可边对弈边调 profile/piklLambda/visits 并即时生效，
+  产出每个段位的实测参数表并写回默认锚点（必须真机校准，访问次数与硬件线程强相关，以耗时预算为硬约束）。
+- 参考配置：`tools/katago-dev/gtp_human5k_example.cfg`（低段纯人类）与
+  `gtp_human9d_search_example.cfg`（高段搜索混合）。
 
 ## 8. KataGo Android 集成要点
 
 - 源码：`https://github.com/lightvector/KataGo`（C++ 部分在 `cpp/`）。
-- **双模型（P3）**：App 同时加载两个引擎实例（同一二进制，不同模型）：
-  - 小模型 **b6c96**（`engineStatusProvider`/`kataGoEngineProvider`）——**18级~1级**（rankIndex 0..17）人机对弈；
-  - 大模型 **b18c384**（`danEngineStatusProvider`/`kataGoDanEngineProvider`）——**1段~9段**（rankIndex 18..26）人机对弈
-    及**全部落点分析**（实时热力图/`kata-analyze`、AI 建议下一步）。
-  - 选型：`KataGoMoveProvider.engineFor(rankIndex)` 按段位自动切换（`match_engine.dart`）；
-    级位门槛看小模型、段位/分析门槛看大模型（`ai_setup_page.dart`、`game_page.dart`）。
-  - 模型文件：`assets/katago/kata1-b6c96-*.txt.gz`（约 5MB gz）、
-    `assets/katago/kata1-b18c384nbt-*.bin.gz`（约 98MB gz），均已在 pubspec 声明随 APK 打包。
-- NDK 交叉编译（示例，参考已在 Android 上成功跑通的社区工程如
-  `kinfkong/katago-android`、`lzjyzq2a/KataGo-Android`）：
+- **单引擎（P6）**：App 只加载一个 KataGo 实例，同时挂 b18c384 主模型与 Human SL 模型：
+  - 主模型 **b18c384** —— **全部落点分析**（实时热力图/`kata-analyze`、AI 建议下一步）
+    与搜索评估。
+  - Human SL 模型 **b18c384nbt-humanv0**（`-human-model`）—— **18级~9段**（rankIndex 0..26）
+    人机对弈，按 `humanSLProfile` 模仿各段位人类棋风（§7）。
+  - 旧 `engineStatusProvider`/`danEngineStatusProvider`（及 `kataGoEngineProvider`/
+    `kataGoDanEngineProvider`）保留为**同源别名**，兼容既有 UI；`KataGoMoveProvider` 持有
+    单一 `engine`，不再按段位切换模型（`match_engine.dart`）。
+  - 模型文件：`assets/katago/kata1-b18c384nbt-*.bin.gz`（约 98MB gz）、
+    `assets/katago/b18c384nbt-humanv0.bin.gz`（约 95MB gz），均已在 pubspec 声明随 APK 打包。
+    （旧 b6c96 小模型已下线。）
+- **后端：Eigen(CPU)**。Android 随 APK 打包 Eigen 版 `libkatago.so`（`tools/fetch_katago.ps1`）。
+  `-Backend OpenCL` 可构建 GPU 版（含厂商 OpenCL 转发 shim `libOpenCL.so`），但**当前不可用**：
+  Android 以子进程运行引擎时处于 linker `(default)` namespace，**无法访问 `/vendor` 的 OpenCL
+  驱动**，引擎启动即失败（`exit=-6`）。启用 GPU 需改为 **in-process（JNI）加载引擎**
+  （参考 `ChuiShui233/KataGO_Android` 的 `KataNative`：`System.loadLibrary` + `dup2` 管道 + 调用
+  `main`），尚未实现。开发机集成测试用 Windows Eigen 版。
+- NDK 交叉编译（脚本已封装）：
   ```powershell
-  cmake -B build -DCMAKE_TOOLCHAIN_FILE=$env:ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake `
-    -DCMAKE_SYSTEM_NAME=Android -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a -DCMAKE_BUILD_TYPE=Release ..
-  cmake --build build -j
+  ./tools/fetch_katago.ps1 -NdkPath $env:ANDROID_NDK_HOME   # Eigen（默认，随 APK）
+  ./tools/fetch_katago.ps1 -Mode WindowsDev                 # 开发机验证
   ```
 - 运行方式：**二进制作为原生库**打进 `android/app/src/main/jniLibs/<abi>/libkatago.so`
   （`.so` 后缀才被 Gradle 打包），运行时从 `nativeLibraryDir`（MethodChannel
@@ -220,7 +233,8 @@ KataGo 在低 visit 下仍远超人类，故弱化需"引擎参数 + 选点容�
 - App 启动预加载引擎（解压+拉起进程），UI 显示加载状态；大模型首次加载慢、占内存。
 - GTP 关键命令：`boardsize N`、`kgs-rules chinese|korean|japanese`、`komi`、
   `clear_board`、`play b D4`、`genmove b`、`final_score`、`kata-analyze b <interval>`、
-  `kata-set-param name value`、`time_settings`。
+  `kata-search_analyze`、`kata-set-params {json}` / `kata-set-param name value`、
+  `kata-get-models`、`time_settings`；启动参数 `-model` + `-human-model`。
 - 领地分析：`kata-analyze` 的 `ownership`（逐点 -1~1）用于热力图，`territory` 用于终局标色，
   top moves（胜率/访问数）用于 AI 建议与选点容错采样。
 
@@ -228,14 +242,14 @@ KataGo 在低 visit 下仍远超人类，故弱化需"引擎参数 + 选点容�
 
 | 资源 | 内容 | 来源/方式 | 是否入仓库 |
 |---|---|---|---|
-| KataGo 二进制 | arm64-v8a，NDK 编译 | 社区包/自编译（另终端） | 否（.gitignore，体积红线） |
-| KataGo 模型 | **b6c96**（级位）+ **b18c384**（段位/分析），均随 APK | katagotraining.org | 否（.gitignore；pubspec 已声明，构建前须存在） |
+| KataGo 二进制 | arm64-v8a，Eigen(CPU) 后端，NDK 编译 | `tools/fetch_katago.ps1`（自编译；`-Backend OpenCL` 可构建 GPU 版但子进程不可用） | 否（.gitignore，体积红线） |
+| KataGo 模型 | **b18c384**（分析/搜索）+ **b18c384nbt-humanv0**（18级~9段 Human SL），均随 APK | katagotraining.org + KataGo v1.15.0 release | 否（.gitignore；pubspec 已声明，构建前须存在） |
 | 死活题数据 | 2678 题 SGF（**三档**：入门 1167 / 中级 1222 / 高级 289）：gogameguru 422（CC BY-NC-SA）+ 古典 Gokyo Shumyo 509（公版位置，社区转制 grey，中级）+ Cho Chikun Elementary 887（入门）+ Cho Chikun Intermediate 860（前 2/3 中级、末 1/3 高级，grey，正解为 OGS 社区回放）；Xuanxuan/Hatsuyōron/Cho-Advanced 因无正解/讲解且 KataGo 无法可靠生成而暂缓收录（配方保留，见 docs/data-sources.md） | baduk-study-material 自由共享库 + travisgk/tsumego-pdf（MIT；题目源自 tsumego.tasuki.org、正解 OGS 社区）整理（许可分级见 docs/data-sources.md 与 `assets/problems/sources.json`；重跑管道见 `D:\AI\go\tsumego\`） | 是（`assets/problems/`） |
 | 基础规则新手指引 | 12 步交互引导（数据+引擎） | 自编（`lib/study/beginner_guide.dart`） | 是 |
 | 定式布局 | 常见定式 SGF + 讲解（自编 4 项 + 专业精讲 1 项） | 自编/公开资料整理 | 是（`assets/lessons/`） |
 
 > 引擎二进制与模型走脚本/下载链接分发（按体积红线）；死活题/定式等小资源直接入库。
-> 引擎二进制位于 `android/app/src/main/jniLibs/arm64-v8a/libkatago.so`（已更新本规则）。
+> 引擎二进制位于 `android/app/src/main/jniLibs/arm64-v8a/libkatago.so`（Eigen 后端）。
 > 历史名谱（`assets/famous/`）已整体下线并随资源移除，勿再引用。
 
 ## 10. 依赖清单（待加入 pubspec）
@@ -255,17 +269,22 @@ flutter build apk --release # 发布包（含资源）
 
 ### 打包规则（发布包，务必遵守）
 
-目标平台只出 **arm64-v8a**（minSdk 21+，优先 arm64；兼容包才考虑 armeabi-v7a/x86_64）。
+发布包出 **arm64-v8a + armeabi-v7a** 两个 ABI（minSdk 24，Flutter 3.38 默认；x86 32 位已被 Flutter 移除，不再支持）：
 
 ```powershell
-flutter build apk --release --target-platform android-arm64   # 单 ABI 发布包
-flutter build apk --release --split-per-abi                   # 需要分 ABI 渠道时
+# 先按 ABI 编译原生库（各放入 jniLibs/<abi>/）
+foreach ($abi in @('arm64-v8a','armeabi-v7a')) {
+  ./tools/fetch_katago.ps1 -NdkPath <你的NDK路径> -Abi $abi -OutDir "android/app/src/main/jniLibs/$abi"
+}
+# 再按 ABI 拆分打包（产出 app-armeabi-v7a-release.apk / app-arm64-v8a-release.apk）
+flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 flutter build apk --release --no-tree-shake-icons             # 仅当图标字库被误裁时
 ```
 
 - 默认 debug fat APK（4 ABI）约 138MB，仅用于快速验证，**禁止作为发布包**。
-- release 单 arm64 实测约 14MB；接入 KataGo 二进制/模型后会增大，届时以模型体积为主。
-- 体积红线：KataGo 模型（b18 约 98MB gz / b6c96 约 5MB gz）**不进仓库**，按 `.gitignore` 排除
+- release 单 ABI 实测约 14MB（未含引擎/模型）；接入 KataGo 二进制/模型后以模型体积为主，
+  故发布采用 `--split-per-abi` 拆分，避免通用包把两份原生库都塞给同一台设备。
+- 体积红线：KataGo 模型（b18 约 98MB gz / humanv0 约 95MB gz）**不进仓库**，按 `.gitignore` 排除
   （`assets/katago/*.gz`），但已在 pubspec 声明随 APK 打包——构建前须先放置模型文件
   （脚本/下载链接分发）；引擎二进制进 `jniLibs` 或 `assets` 时同步更新本规则。
 - 修改 `core/`、`engine/`、`game/`、`study/` 逻辑后必须补对应 `test/` 单测。
@@ -302,11 +321,12 @@ flutter build apk --release --no-tree-shake-icons             # 仅当图标字�
 | **P3 生涯模式** ✅ | `career_controller`（大赛生成/报名/赛程/积分/升降级）；生涯统计；段位徽章 | career 结算单测通过 |
 | **P4 棋谱模块** ✅ | `core/sgf.dart` 完整解析/序列化（树/布子/分支/注释/双字母表容错）；复盘页（回放+势力范围+AI 建议+点目）；**棋谱库仅收观赛保存 + 本地 SGF 导入**，条目点击回看；个人对局在首页「历史记录」回看；历史名谱/研究棋谱入口已下线 | sgf 往返 + review_controller 单测；复盘页可用（导入走 file_picker，见 `ui/record/sgf_import.dart`） |
 | **P5 功课模块** ✅ | `problem_engine`（初始 422 题判定，2026-09 起**三档**题库 2678 题）+ `problem_store` 进度 + 答题页/正解回放/讲解；入门基础与定式布局页面 | problem_engine/problem_store 单测 + 资产校验（全部题可解析可走通，三档均有题） |
-| **P6 打磨与发布** | 棋盘/棋子风格、棋盘大小、对局中切规则、引擎高级参数；**真机校准难度表**；release 单 arm64 打包；补充文档 | release 包可安装；难度表已校准 |
+| **P6 打磨与发布** | 棋盘/棋子风格、棋盘大小、对局中切规则、引擎高级参数；**Human SL 单引擎对手段位对齐（18级~9段）**；**真机校准难度表**；release 单 arm64 打包；补充文档 | release 包可安装；难度表已校准 |
 
 ## 15. 风险与待确认
 
-- **低段位棋力地板**：纯引擎难以造出"18级"，必须依赖选点容错采样（§7），需真机校准。
+- **低段位棋力地板**：已改用 Human SL 模型按段位模仿人类棋风（§7），
+  仍须真机校准各档 `humanSLProfile`/`piklLambda`/visits 以达到"与人类段位体感一致"。
 - **19 路高段位耗时**：生涯默认建议 9/13 路，19 路留给人机/分析；以耗时预算为硬约束。
 - **死活题/名谱版权**：入库前核对许可证（§9）。
 - **引擎资源依赖**：P2/P3 依赖外部准备完成，未就绪时用 Dart 规则 AI 顶替开发。

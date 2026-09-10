@@ -47,7 +47,8 @@ app.*.map.json
 # KataGo 引擎资源（体积红线，AGENTS.md §9，不入仓库；tools 脚本产出）
 # 引擎二进制为原生库（nativeLibraryDir 才可 exec），模型/配置为 assets 数据
 assets/katago/*.gz
-android/app/src/main/jniLibs/arm64-v8a/libkatago.so
+android/app/src/main/jniLibs/*/libkatago.so
+android/app/src/main/jniLibs/arm64-v8a/libOpenCL.so
 tools/katago-dev/
 
 # 运行时日志（tools 脚本 / 应用写盘，不入仓库）

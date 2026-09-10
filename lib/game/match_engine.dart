@@ -1,41 +1,35 @@
-import 'dart:math' as math;
-
 import 'package:miaogo/core/board.dart';
 import 'package:miaogo/core/move.dart';
-import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/engine/analysis.dart';
 import 'package:miaogo/engine/difficulty.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/move_provider.dart';
 
-/// KataGo 驱动的 [MoveProvider]：引擎搜索 + 低段位选点容错采样。
+/// KataGo 驱动的 [MoveProvider]（单引擎 + Human SL）。
 ///
-/// 双模型（P3）：按对手段位自动选型——rankIndex < 18（18级~1级）用小模型
-/// b6c96，>= 18（1段~9段）用大模型 b18c384。
+/// 按对手段位下发 Human SL 参数（`humanSLProfile` / `humanSLChosenMovePiklLambda`
+/// 等，见 [DifficultyTable]），由引擎自身按该段位人类棋风选点：
+/// - 级位（18级~1级）纯人类策略；
+/// - 段位（1段~9段）逐步混入搜索增强棋力。
 ///
-/// - 用 `kata-search_analyze` 拿 top-N 候选，按难度温度加权采样（§7 选点容错）；
-///   温度高/段位低时容易抽中次优乃至再次优，制造漏招。
-/// - 采样结果用 [GoBoard] 二次合法性校验（引擎不含劫禁历史），非法则重采样。
-/// - 引擎异常直接上抛（[GtpEngineException]），由对局层负责重启/中止，不做降级。
+/// 引擎返回的 `play <move>`（含 `pass`/`resign`）即最终着法；仅在缺失时回退到
+/// 分析候选中的最优合法点。引擎异常直接上抛（[GtpEngineException]），由对局层
+/// 负责重启/中止，不做降级。
 class KataGoMoveProvider implements MoveProvider {
   KataGoMoveProvider({
-    required this.kyuEngine,
-    required this.danEngine,
-    math.Random? random,
+    required this.engine,
     GoRule rule = GoRule.chinese,
     double komi = 7.5,
-  })  : _random = random ?? math.Random(),
-        _rule = rule,
+  })  : _rule = rule,
         _komi = komi;
 
-  /// 小模型引擎（级位对弈）。
-  final KataGoEngine kyuEngine;
+  /// 单引擎（b18c384 主模型 + Human SL 模型）。
+  final KataGoEngine engine;
 
-  /// 大模型引擎（段位对弈）；未就绪时为 null（由 UI 按难度拦截）。
-  final KataGoEngine? danEngine;
-
-  final math.Random _random;
+  /// 兼容旧 UI 命名：单引擎架构下两者同源。
+  KataGoEngine get kyuEngine => engine;
+  KataGoEngine get danEngine => engine;
 
   /// 每次 AI 搜索完成后的回调（侧别 = 行棋方 + 其视角胜率 0..1）。
   ///
@@ -50,32 +44,17 @@ class KataGoMoveProvider implements MoveProvider {
   GoRule get rule => _rule;
   double get komi => _komi;
 
-  /// 按段位选型（AGENTS.md §6：index 0..17 = 18级~1级，18..26 = 1段~9段）。
-  KataGoEngine engineFor(int rankIndex) {
-    if (rankIndex >= RankSystem.kNumKyuRanks) {
-      final dan = danEngine;
-      if (dan == null) {
-        throw const GtpEngineException('大模型（b18c384）未就绪，无法进行段位对弈');
-      }
-      return dan;
-    }
-    return kyuEngine;
-  }
-
-  /// 对局中切换规则：同步两个引擎的规则与贴目。
+  /// 对局中切换规则：同步引擎的规则与贴目。
   Future<void> updateRule(GoRule rule, double komi) async {
     _rule = rule;
     _komi = komi;
-    await kyuEngine.updateRules(rule, komi);
-    final dan = danEngine;
-    if (dan != null) await dan.updateRules(rule, komi);
+    await engine.updateRules(rule, komi);
   }
 
   @override
   Future<Move> chooseMove(GoBoard board, PlayerColor toMove,
       {required int rankIndex}) async {
     final diff = DifficultyTable.forRank(rankIndex);
-    final engine = engineFor(rankIndex);
     final result = await engine.searchAndAnalyze(
       board: board,
       toMove: toMove,
@@ -88,82 +67,61 @@ class KataGoMoveProvider implements MoveProvider {
     if (winrate != null) {
       winrateListener?.call(toMove, winrate);
     }
-    return _sampleMove(
+    return _selectMove(
       board: board,
       toMove: toMove,
       update: result.update,
       chosen: result.chosen,
-      difficulty: diff,
     );
   }
 
-  /// 从分析候选里按温度加权采样；无有效候选时回退引擎自选/PASS。
-  Move _sampleMove({
+  /// 引擎自选着法优先；缺失时回退分析候选中的最优合法点，最后 PASS。
+  Move _selectMove({
     required GoBoard board,
     required PlayerColor toMove,
     required AnalysisUpdate? update,
     required String? chosen,
-    required EngineDifficulty difficulty,
   }) {
-    final candidates = _legalCandidates(board, toMove, update);
-    if (candidates.isEmpty) {
-      // 无可用候选：回退引擎自选着法。
-      return _moveFromVertex(chosen, toMove, board) ?? Move.pass(toMove);
+    if (chosen != null && chosen.isNotEmpty) {
+      return _chosenToMove(chosen, toMove, board);
     }
-    if (difficulty.topK <= 1 || difficulty.temperature <= 0.05) {
-      // 高段位：取最优。
-      return candidates.first.move;
-    }
-
-    final topK = math.min(difficulty.topK, candidates.length);
-    final pool = candidates.sublist(0, topK);
-    // 权重 = exp(-order / temperature)：温度越高越趋于均匀随机。
-    final weights = [
-      for (final m in pool) math.exp(-m.analysis.order / difficulty.temperature)
-    ];
-    return _weightedPick(pool, weights);
+    return _bestLegalCandidate(board, toMove, update) ?? Move.pass(toMove);
   }
 
-  /// 按 order 排序、去对称重复、过滤本棋盘合法点的候选。
-  List<({MoveAnalysis analysis, Move move})> _legalCandidates(
-      GoBoard board, PlayerColor toMove, AnalysisUpdate? update) {
-    if (update == null) return const [];
-    final seen = <String>{};
-    final out = <({MoveAnalysis analysis, Move move})>[];
-    for (final a in update.orderedMoves) {
-      final key = a.isSymmetryOf ?? a.move;
-      if (!seen.add(key)) continue; // 对称候选合并
-      final v = coordFromGtp(a.move);
-      if (v == null) continue; // pass 不作为采样候选（引擎自身会判断）
+  /// 解析引擎 `play <vertex>`：`pass`/`resign`/坐标；非法或不可落子则 PASS。
+  Move _chosenToMove(String vertex, PlayerColor color, GoBoard board) {
+    final lower = vertex.toLowerCase();
+    if (lower == 'pass') return Move.pass(color);
+    if (lower == 'resign') return Move.resign(color);
+    try {
+      final v = coordFromGtp(vertex);
+      if (v == null) return Move.pass(color);
       final (r, c) = v;
-      if (!board.inBounds(r, c) || !board.isLegal(toMove, r, c)) continue;
-      out.add((analysis: a, move: Move.point(toMove, r, c)));
+      if (board.inBounds(r, c) && board.isLegal(color, r, c)) {
+        return Move.point(color, r, c);
+      }
+    } catch (_) {
+      // 非法坐标：回退 PASS。
     }
-    return out;
+    return Move.pass(color);
   }
 
-  Move? _moveFromVertex(String? vertex, PlayerColor color, GoBoard board) {
-    if (vertex == null) return null;
-    final v = coordFromGtp(vertex);
-    if (v == null) return Move.pass(color);
-    final (r, c) = v;
-    if (board.inBounds(r, c) && board.isLegal(color, r, c)) {
-      return Move.point(color, r, c);
+  /// 分析候选中第一个可落子的点（`pass` 与非法点跳过）。
+  Move? _bestLegalCandidate(
+      GoBoard board, PlayerColor toMove, AnalysisUpdate? update) {
+    if (update == null) return null;
+    for (final a in update.orderedMoves) {
+      try {
+        final v = coordFromGtp(a.move);
+        if (v == null) continue;
+        final (r, c) = v;
+        if (board.inBounds(r, c) && board.isLegal(toMove, r, c)) {
+          return Move.point(toMove, r, c);
+        }
+      } catch (_) {
+        continue;
+      }
     }
     return null;
-  }
-
-  Move _weightedPick(
-      List<({MoveAnalysis analysis, Move move})> pool, List<double> weights) {
-    var total = 0.0;
-    for (final w in weights) {
-      total += w;
-    }
-    var r = _random.nextDouble() * total;
-    for (var i = 0; i < pool.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return pool[i].move;
-    }
-    return pool.last.move;
   }
 }

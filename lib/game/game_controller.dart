@@ -496,6 +496,11 @@ class GameController extends Notifier<GameState> {
 
   void _applyAiMove(Move move) {
     final s = state;
+    if (move.isResign) {
+      // 引擎（Human SL）判断败局已定而认输：按 AI 认输收尾。
+      _finishByResign(move.color);
+      return;
+    }
     if (move.isPass) {
       _applyPass(move.color);
       return;

@@ -8,7 +8,6 @@ import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/core/scoring.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/engine/analysis.dart';
-import 'package:miaogo/engine/difficulty.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/review_controller.dart';
@@ -31,15 +30,9 @@ class ReviewPage extends ConsumerStatefulWidget {
   ConsumerState<ReviewPage> createState() => _ReviewPageState();
 }
 
-/// 回看页胜率曲线逐手评估预算（低开销，不套对手段位）。
-const EngineDifficulty _kCurveEvalDifficulty = EngineDifficulty(
-  rankIndex: 0,
-  maxVisits: 40,
-  maxTimeMs: 300,
-  temperature: 0.1,
-  rootNoise: 0,
-  topK: 1,
-);
+/// 回看页胜率曲线逐手评估预算（中性分析参数，低开销，不套对手段位）。
+const int _kCurveEvalVisits = 40;
+const int _kCurveEvalTimeMs = 300;
 
 class _ReviewPageState extends ConsumerState<ReviewPage> {
   AnalysisSession? _analysisSession;
@@ -264,12 +257,13 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
   ReviewWinrateEval _curveEvalFor(
       KataGoEngine engine, GoRule rule, double komi) {
     return (board, toMove) async {
-      final result = await engine.searchAndAnalyze(
+      final result = await engine.searchAnalysis(
         board: board,
         toMove: toMove,
         rule: rule,
         komi: komi,
-        difficulty: _kCurveEvalDifficulty,
+        maxVisits: _kCurveEvalVisits,
+        maxTimeMs: _kCurveEvalTimeMs,
       );
       return bestCandidateWinrate(result.update);
     };

@@ -6,10 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/board.dart';
 import 'package:miaogo/core/move.dart';
-import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/engine/analysis.dart';
-import 'package:miaogo/engine/difficulty.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/career.dart';
@@ -77,15 +75,9 @@ class GamePage extends ConsumerStatefulWidget {
 /// 实时分析单局面搜索 visit 上限：到达后自动停止并保留结果展示。
 const int _kAnalysisVisitCap = 100;
 
-/// 胜率曲线「轮到玩家那手」的低开销评估预算（不套对手段位）。
-const EngineDifficulty _kCurveEvalDifficulty = EngineDifficulty(
-  rankIndex: 0,
-  maxVisits: 40,
-  maxTimeMs: 300,
-  temperature: 0.1,
-  rootNoise: 0,
-  topK: 1,
-);
+/// 胜率曲线「轮到玩家那手」的低开销评估预算（中性分析参数，不套对手段位）。
+const int _kCurveEvalVisits = 40;
+const int _kCurveEvalTimeMs = 300;
 
 class _GamePageState extends ConsumerState<GamePage> {
   bool _dialogShown = false;
@@ -221,18 +213,14 @@ class _GamePageState extends ConsumerState<GamePage> {
   }
 
   bool get _engineReady =>
-      ref.read(danEngineStatusProvider) == EngineStatus.ready;
+      ref.read(engineStatusProvider) == EngineStatus.ready;
 
-  /// 本局 AI 所用引擎控制器（按对手段位选型：级位小模型 / 段位大模型）。
+  /// 本局 AI 所用引擎控制器（单引擎，对弈与分析共用）。
   EngineController get _gameEngineController =>
-      widget.difficulty >= RankSystem.kNumKyuRanks
-          ? ref.read(danEngineStatusProvider.notifier)
-          : ref.read(engineStatusProvider.notifier);
+      ref.read(engineStatusProvider.notifier);
 
   NotifierProvider<EngineController, EngineStatus> get _gameEngineStatusProvider =>
-      widget.difficulty >= RankSystem.kNumKyuRanks
-          ? danEngineStatusProvider
-          : engineStatusProvider;
+      engineStatusProvider;
 
   /// 实时分析开关（引擎必须就绪；未就绪由按钮禁用拦截）。
   void _toggleAnalysis() {
@@ -372,15 +360,10 @@ class _GamePageState extends ConsumerState<GamePage> {
     final hand = game.moves.length;
     if (_blackWinrateByHand.containsKey(hand)) return;
     final provider = ref.read(kataGoMoveProvider);
-    final engine = provider == null
-        ? null
-        : (game.difficulty >= RankSystem.kNumKyuRanks
-            ? provider.danEngine
-            : provider.kyuEngine);
+    final engine = provider?.engine;
     if (engine == null) return;
-    final usingDan = engine == provider!.danEngine;
-    if (usingDan && _analysisEnabled) {
-      // 实时分析正占用大模型：先异步关闭，再回来评估。
+    if (_analysisEnabled) {
+      // 实时分析正占用引擎：先异步关闭，再回来评估。
       _curveStoppingAnalysis = true;
       unawaited(() async {
         try {
@@ -408,12 +391,13 @@ class _GamePageState extends ConsumerState<GamePage> {
     _curveEvalInFlight = true;
     unawaited(() async {
       try {
-        final r = await engine.searchAndAnalyze(
+        final r = await engine.searchAnalysis(
           board: game.board.clone(),
           toMove: sideToMove,
           rule: rule,
           komi: komi,
-          difficulty: _kCurveEvalDifficulty,
+          maxVisits: _kCurveEvalVisits,
+          maxTimeMs: _kCurveEvalTimeMs,
         );
         if (!mounted) return;
         final wr = bestCandidateWinrate(r.update);
@@ -507,12 +491,17 @@ class _GamePageState extends ConsumerState<GamePage> {
       if (!next.isHumanTurn && _selected != null) {
         setState(() => _selected = null);
       }
-      // 落子/悔棋后：若实时分析开启，按新局面重启。
+      // 落子/悔棋后：若实时分析开启，仅在玩家回合重启（AI 回合停分析，
+      // 避免与同一引擎上的 AI 搜索争抢命令流）。
       if (_analysisEnabled && next.moves.length != _lastMoveCount) {
         _lastMoveCount = next.moves.length;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _restartAnalysis();
-        });
+        if (next.isHumanTurn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _restartAnalysis();
+          });
+        } else {
+          unawaited(_stopAnalysis());
+        }
       }
       // 胜率曲线自开局常开采集：每步状态变化都修剪/排程采样。
       _pruneCurveTo(next.moves.length);

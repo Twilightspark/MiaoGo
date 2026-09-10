@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.7.0+1
+version: 1.7.1+1
 
 environment:
   sdk: ^3.10.0-290.4.beta
@@ -76,11 +76,11 @@ flutter:
   # KataGo 引擎资源（P2）。模型/配置体积红线见 AGENTS.md §9，不入 git。
   # 引擎二进制为原生库：android/app/src/main/jniLibs/arm64-v8a/libkatago.so
   # （tools/fetch_katago.ps1 产出），随 APK 打进 nativeLibraryDir。
-  # 双模型（P3）：b6c96 小模型负责 18级-1级，b18c384 大模型负责 1段-9段与落点分析。
+  # 单引擎（P6）：b18c384 主模型负责落点分析，human 模型负责 18级-9段拟人对手。
   assets:
     - assets/katago/gtp.cfg
-    - assets/katago/kata1-b6c96-s175395328-d26788732.txt.gz
     - assets/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz
+    - assets/katago/b18c384nbt-humanv0.bin.gz
     # 棋谱 / 功课资源（P4/P5）：死活题、定式，均入库提交。
     # 注：目录声明仅含其直属文件，子目录须单独声明。
     - assets/problems/

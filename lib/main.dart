@@ -30,9 +30,8 @@ class _MiaoGoRootState extends ConsumerState<_MiaoGoRoot> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // 双模型（P3）：小模型 b6c96 负责级位对弈，大模型 b18c384 负责段位对弈与分析。
+      // 单引擎（P6）：b18c384 主模型 + Human SL 模型，对弈与分析共用。
       ref.read(engineStatusProvider.notifier).start();
-      ref.read(danEngineStatusProvider.notifier).start();
     });
   }
 

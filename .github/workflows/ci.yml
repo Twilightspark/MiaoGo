@@ -24,9 +24,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            assets/katago/kata1-b6c96-s175395328-d26788732.txt.gz
             assets/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz
-          key: katago-models-v1
+            assets/katago/b18c384nbt-humanv0.bin.gz
+          key: katago-models-v2
 
       - name: Fetch KataGo models
         shell: pwsh

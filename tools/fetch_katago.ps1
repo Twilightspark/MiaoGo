@@ -1,20 +1,34 @@
 ﻿<#
 .SYNOPSIS
-  KataGo 二进制获取脚本（MiaoGo P2）。
+  KataGo 二进制获取脚本（MiaoGo P2/P6）。
   两种模式：
     - 默认（Android）：NDK 交叉编译 arm64-v8a 到 android/app/src/main/jniLibs/arm64-v8a/libkatago.so
       （原生库目录才可 exec；应用私有 files/ 被 SELinux/noexec 禁止，见 AGENTS.md §8）。
+      后端由 -Backend 选择：
+        Eigen（默认）：纯 CPU，无额外依赖。
+        OpenCL：GPU 后端。额外产出 libOpenCL.so（厂商 OpenCL 转发 shim，随 APK 打包），
+                引擎运行期经 shim dlopen 设备 /vendor 的 OpenCL 驱动（见 AGENTS.md §8）。
     - -WindowsDev：从官方 release 下载 eigen-windows-x64 到 tools/katago-dev/ 供开发机验证。
 .PARAMETER Mode
   Android（默认）| WindowsDev
+.PARAMETER Backend
+  Android 后端：Eigen（默认）| OpenCL。
 .PARAMETER NdkPath
   Android NDK 根目录；缺省取 $env:ANDROID_NDK_HOME（或 ANDROID_NDK_ROOT）。
 .PARAMETER Abi
-  目标 ABI，默认 arm64-v8a（发布包仅出 arm64）。
+  目标 ABI，默认 arm64-v8a（发布包出 arm64-v8a + armeabi-v7a；OpenCL 后端仅支持 arm64）。
 .PARAMETER Version
   KataGo 版本 tag，默认 v1.18.1。
 .PARAMETER EigenIncludeDir
   Eigen3 头文件根目录（含 Eigen/ 与 unsupported/）；缺省尝试 $env:TEMP/eigen-3.4.0。
+  仅 -Backend Eigen 需要。
+.PARAMETER OpenClHeadersDir
+  OpenCL 头文件根目录（含 CL/）；缺省下载 Khronos OpenCL-Headers 到临时目录。
+  仅 -Backend OpenCL 需要。
+.PARAMETER ShimSource
+  厂商 OpenCL 转发 shim 源码（shim.c）路径；缺省从固定 commit 下载到临时目录。
+  仅 -Backend OpenCL 需要。shim 需实现 KataGo 用到的全部 cl* 入口，并在运行期
+  dlopen 设备 /vendor 的 OpenCL 驱动（exec 子进程默认 namespace 不搜索 /vendor）。
 .PARAMETER OutDir
   二进制输出目录（Android 模式），默认 android/app/src/main/jniLibs/arm64-v8a。
 .PARAMETER DevOutDir
@@ -26,16 +40,22 @@
 .EXAMPLE
   ./tools/fetch_katago.ps1 -NdkPath D:\Android\Sdk\ndk\27.2.12479018
 .EXAMPLE
+  ./tools/fetch_katago.ps1 -Backend OpenCL -NdkPath D:\Android\Sdk\ndk\28.2.13676358
+.EXAMPLE
   ./tools/fetch_katago.ps1 -Mode WindowsDev
 #>
 [CmdletBinding()]
 param(
   [ValidateSet('Android', 'WindowsDev')]
   [string]$Mode = 'Android',
+  [ValidateSet('Eigen', 'OpenCL')]
+  [string]$Backend = 'Eigen',
   [string]$NdkPath = '',
   [string]$Abi = 'arm64-v8a',
   [string]$Version = 'v1.18.1',
   [string]$EigenIncludeDir = '',
+  [string]$OpenClHeadersDir = '',
+  [string]$ShimSource = '',
   [string]$OutDir = 'android/app/src/main/jniLibs/arm64-v8a',
   [string]$DevOutDir = 'tools/katago-dev',
   [string]$KataGoSha256 = '',
@@ -47,6 +67,12 @@ Set-StrictMode -Version 3.0
 
 # 官方 release 下载根（Windows eigen 版由用户按需确认后使用）
 $WinReleaseBase = 'https://github.com/lightvector/KataGo/releases/download'
+
+# Khronos OpenCL 头文件（Apache-2.0）
+$KhronosHeadersZip = 'https://github.com/KhronosGroup/OpenCL-Headers/archive/refs/heads/main.zip'
+# OpenCL 转发 shim 来源（参考工程未附许可证，故构建时按固定 commit 拉取，不入仓库）
+$ShimRef = '12c6a815fba1f24af3f49dc3c12f721c4d33c46d'
+$ShimUrl = "https://raw.githubusercontent.com/ChuiShui233/KataGO_Android/$ShimRef/build-tools/opencl-shim/shim.c"
 
 function Resolve-PathOrThrow([string]$p, [string]$what) {
   if ([string]::IsNullOrWhiteSpace($p)) { throw "$what 为空" }
@@ -93,9 +119,20 @@ if ([string]::IsNullOrWhiteSpace($ndk)) {
 if ([string]::IsNullOrWhiteSpace($ndk)) {
   $ndk = $env:ANDROID_NDK_ROOT
 }
+if ([string]::IsNullOrWhiteSpace($ndk)) {
+  # 回退：Android SDK 下的 ndk/<版本>（取最新）
+  $sdk = $env:ANDROID_HOME
+  if ([string]::IsNullOrWhiteSpace($sdk)) { $sdk = $env:ANDROID_SDK_ROOT }
+  if (-not [string]::IsNullOrWhiteSpace($sdk) -and (Test-Path -LiteralPath (Join-Path $sdk 'ndk'))) {
+    $cand = Get-ChildItem -LiteralPath (Join-Path $sdk 'ndk') -Directory |
+      Sort-Object Name -Descending | Select-Object -First 1
+    if ($cand) { $ndk = $cand.FullName }
+  }
+}
 $ndk = Resolve-PathOrThrow $ndk 'Android NDK 路径（-NdkPath / ANDROID_NDK_HOME）'
 # CMake 生成 CMakeSystem.cmake 时需正斜杠路径（反斜杠会触发转义错误）
 $ndkFwd = ($ndk -replace '\\', '/')
+$apiLevel = 24
 
 # 临时目录（GitHub Linux runner 不设 $env:TEMP，须用 GetTempPath() 兜底）
 $tempRoot = $env:RUNNER_TEMP
@@ -123,15 +160,72 @@ Write-Host "克隆 KataGo $Version ..."
 git clone --depth 1 --branch $Version https://github.com/lightvector/KataGo.git $src
 if ($LASTEXITCODE -ne 0) { throw 'git clone 失败' }
 
-# Eigen3 头文件（KataGo 仓库不附带）
-$eigen = $EigenIncludeDir
-if ([string]::IsNullOrWhiteSpace($eigen)) { $eigen = Join-Path $tempRoot 'eigen-3.4.0' }
-if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen'))) {
-  throw "未找到 Eigen3 头文件（含 Eigen/ 与 unsupported/）：$eigen。请先解压 eigen-3.4.0 到该目录，或 -EigenIncludeDir 指定。"
-}
-
 $srcCpp = Join-Path $src 'cpp'
 if (-not (Test-Path -LiteralPath (Join-Path $srcCpp 'CMakeLists.txt'))) { throw 'KataGo cpp/ 缺失（源码结构异常）' }
+
+# 后端相关参数
+$backendArgs = @()
+if ($Backend -eq 'OpenCL') {
+  if ($Abi -ne 'arm64-v8a') { throw "OpenCL 后端当前仅支持 arm64-v8a（收到 $Abi）" }
+
+  # OpenCL 头文件
+  $headers = $OpenClHeadersDir
+  if ([string]::IsNullOrWhiteSpace($headers)) {
+    $headers = Join-Path $tempRoot 'OpenCL-Headers-main'
+    if (-not (Test-Path -LiteralPath (Join-Path $headers 'CL\cl.h'))) {
+      $hdrZip = Join-Path $tempRoot 'opencl-headers.zip'
+      Get-ArchiveFromUrl $KhronosHeadersZip $hdrZip ''
+      Expand-Archive -LiteralPath $hdrZip -DestinationPath $tempRoot -Force
+    }
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $headers 'CL\cl.h'))) {
+    throw "OpenCL 头文件缺失（含 CL/cl.h）: $headers"
+  }
+
+  # 转发 shim 源码
+  $shimSrc = $ShimSource
+  if ([string]::IsNullOrWhiteSpace($shimSrc)) {
+    $shimSrc = Join-Path $tempRoot 'katago-opencl-shim.c'
+    if (-not (Test-Path -LiteralPath $shimSrc)) {
+      Write-Host "下载 OpenCL shim: $ShimUrl"
+      Invoke-WebRequest -Uri $ShimUrl -OutFile $shimSrc
+    }
+  }
+  if (-not (Test-Path -LiteralPath $shimSrc)) { throw "OpenCL shim 源码缺失: $shimSrc" }
+
+  # 交叉编译 shim -> libOpenCL.so（SONAME=libOpenCL.so，供引擎 DT_NEEDED 解析）
+  $tcBin = Join-Path $ndk 'toolchains/llvm/prebuilt/windows-x86_64/bin'
+  $shimClang = Join-Path $tcBin "aarch64-linux-android$apiLevel-clang.cmd"
+  if (-not (Test-Path -LiteralPath $shimClang)) { throw "未找到 NDK clang: $shimClang" }
+  $shimOut = Join-Path $out 'libOpenCL.so'
+  Write-Host '编译 OpenCL shim ...'
+  $shimArgs = @(
+    "--target=aarch64-linux-android$apiLevel",
+    '-shared', '-fPIC', '-O2',
+    '-Wl,-soname,libOpenCL.so',
+    "-I$headers",
+    '-o', $shimOut, $shimSrc,
+    '-ldl', '-llog'
+  )
+  & $shimClang @shimArgs
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $shimOut)) { throw 'OpenCL shim 编译失败' }
+  $stripBin = Join-Path $tcBin 'llvm-strip.exe'
+  if (Test-Path -LiteralPath $stripBin) { & $stripBin $shimOut }
+  Write-Host "OpenCL shim 就绪: $shimOut"
+
+  $backendArgs += '-DUSE_BACKEND=OPENCL'
+  $backendArgs += "-DOpenCL_INCLUDE_DIR=$($headers -replace '\\', '/')"
+  $backendArgs += "-DOpenCL_LIBRARY=$($shimOut -replace '\\', '/')"
+} else {
+  # Eigen3 头文件（KataGo 仓库不附带）
+  $eigen = $EigenIncludeDir
+  if ([string]::IsNullOrWhiteSpace($eigen)) { $eigen = Join-Path $tempRoot 'eigen-3.4.0' }
+  if (-not (Test-Path -LiteralPath (Join-Path $eigen 'Eigen'))) {
+    throw "未找到 Eigen3 头文件（含 Eigen/ 与 unsupported/）：$eigen。请先解压 eigen-3.4.0 到该目录，或 -EigenIncludeDir 指定。"
+  }
+  $backendArgs += '-DUSE_BACKEND=EIGEN'
+  $backendArgs += "-DEIGEN3_INCLUDE_DIRS=$($eigen -replace '\\', '/')"
+}
 
 $build = Join-Path $srcCpp 'build'
 $cmakeBin = if ($cmake -is [System.Management.Automation.CommandInfo]) { $cmake.Source } else { $cmake.FullName }
@@ -150,6 +244,11 @@ if (-not $ninja) {
 
 # sha2.cpp 依赖 BYTE_ORDER 宏（Android bionic 默认不提供），统一按小端定义。
 $byteOrder = '-DBYTE_ORDER=1234 -DLITTLE_ENDIAN=1234 -DBIG_ENDIAN=4321'
+# 32 位 ARM 默认不开 NEON（Eigen 会退化为标量、棋力/速度骤降），显式启用；
+# 现代 armeabi-v7a 设备均支持 NEON（不支持的老 ARMv6 本就不在支持范围）。
+if ($Abi -eq 'armeabi-v7a') {
+  $byteOrder += ' -mfpu=neon'
+}
 
 $cmakeArgs = @(
   '-G', 'Ninja',
@@ -157,19 +256,18 @@ $cmakeArgs = @(
   "-DCMAKE_SYSTEM_NAME=Android",
   "-DCMAKE_ANDROID_NDK=$ndkFwd",
   "-DCMAKE_ANDROID_ARCH_ABI=$Abi",
-  '-DANDROID_PLATFORM=24',
+  "-DANDROID_PLATFORM=$apiLevel",
   '-DCMAKE_BUILD_TYPE=Release',
   "-DCMAKE_C_FLAGS=$byteOrder",
   "-DCMAKE_CXX_FLAGS=$byteOrder",
   '-DBUILD_DISTRIBUTED=OFF',
-  '-DUSE_BACKEND=EIGEN',
-  '-DUSE_GZIP=ON',
-  "-DEIGEN3_INCLUDE_DIRS=$($eigen -replace '\\', '/')"
+  '-DUSE_GZIP=ON'
 )
+$cmakeArgs += $backendArgs
 if ($ninja) { $cmakeArgs += "-DCMAKE_MAKE_PROGRAM=$ninja" }
 $cmakeArgs += $srcCpp
 
-Write-Host "CMake 配置（$Abi）：$cmakeBin"
+Write-Host "CMake 配置（$Abi / $Backend）：$cmakeBin"
 & $cmakeBin @cmakeArgs
 if ($LASTEXITCODE -ne 0) { throw "cmake configure 失败（exit $LASTEXITCODE）" }
 
@@ -187,8 +285,11 @@ if ($bytes.Length -lt 4 -or $bytes[0] -ne 0x7F -or $bytes[1] -ne 0x45 -or $bytes
   throw "产物不是 ELF（预期 Android 可执行文件）: $bin"
 }
 
-# 瘦身：NDK llvm-strip（若可用）
-$strip = Join-Path $ndk 'toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe'
+# 瘦身：NDK llvm-strip（若可用）。按宿主机选择 prebuilt 目录（Windows / Linux runner）。
+$isWin = ($env:OS -eq 'Windows_NT')
+$hostTag = if ($isWin) { 'windows-x86_64' } else { 'linux-x86_64' }
+$stripName = if ($isWin) { 'llvm-strip.exe' } else { 'llvm-strip' }
+$strip = Join-Path $ndk "toolchains/llvm/prebuilt/$hostTag/bin/$stripName"
 if (Test-Path -LiteralPath $strip) {
   Write-Host 'llvm-strip 瘦身...'
   & $strip $bin
@@ -200,7 +301,10 @@ if (Test-Path -LiteralPath $strip) {
 $dest = Join-Path $out 'libkatago.so'
 Copy-Item -LiteralPath $bin -Destination $dest -Force
 $sizeMb = [math]::Round((Get-Item -LiteralPath $dest).Length / 1MB, 1)
-Write-Host "已完成: $dest（$sizeMb MB，ELF/AArch64，打包进 nativeLibraryDir）"
+Write-Host "已完成: $dest（$sizeMb MB，ELF/$Abi，打包进 nativeLibraryDir）"
+if ($Backend -eq 'OpenCL') {
+  Write-Host "OpenCL 依赖: $(Join-Path $out 'libOpenCL.so')（随 APK 打包，运行期转发到设备 OpenCL 驱动）"
+}
 
 if (-not $KeepSource) {
   Remove-Item -LiteralPath $src -Recurse -Force

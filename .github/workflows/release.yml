@@ -1,8 +1,8 @@
 name: Release
 
 # 触发：推送 v* tag（如 v1.0.0）或手动执行。
-# 流程：拉取 KataGo 模型 → NDK 编译 KataGo 原生库（libkatago.so）→
-#       构建单 ABI（arm64-v8a）release APK → 生成 GitHub Release 并附带 APK。
+# 流程：拉取 KataGo 模型 → 按 ABI 交叉编译 KataGo 原生库（arm64-v8a + armeabi-v7a）→
+#       按 ABI 拆分构建 release APK → 生成 GitHub Release 并附带各 ABI 的 APK。
 # 说明：模型与引擎二进制均不入 git（体积红线，AGENTS.md §9），由本工作流在构建期准备。
 
 on:
@@ -53,9 +53,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            assets/katago/kata1-b6c96-s175395328-d26788732.txt.gz
             assets/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz
-          key: katago-models-v1
+            assets/katago/b18c384nbt-humanv0.bin.gz
+          key: katago-models-v2
 
       - name: Fetch KataGo models
         shell: pwsh
@@ -72,36 +72,51 @@ jobs:
           if (-not (Test-Path "$env:RUNNER_TEMP/eigen/eigen-3.4.0/Eigen")) { throw 'Eigen 头文件缺失' }
           Write-Output "EIGEN_INC=$env:RUNNER_TEMP/eigen/eigen-3.4.0" >> $env:GITHUB_ENV
 
-      - name: Build KataGo engine (NDK arm64-v8a)
+      - name: Build KataGo engine (NDK, arm64-v8a + armeabi-v7a)
         shell: pwsh
         run: |
           Write-Host "DEBUG NDK=$env:ANDROID_NDK_HOME EIGEN=$env:EIGEN_INC"
-          $log = @()
           $failed = $false
-          try {
-            $log = & ./tools/fetch_katago.ps1 -NdkPath $env:ANDROID_NDK_HOME -EigenIncludeDir $env:EIGEN_INC -Abi arm64-v8a *>&1 | ForEach-Object { $_.ToString() }
-          } catch {
-            $failed = $true
-            $log += "TERMINATING: $($_.Exception.Message)"
-            $log += "AT: $($_.InvocationInfo.PositionMessage)"
+          foreach ($abi in @('arm64-v8a', 'armeabi-v7a')) {
+            Write-Host "==== 编译 libkatago.so：$abi ===="
+            $log = @()
+            try {
+              $log = & ./tools/fetch_katago.ps1 -NdkPath $env:ANDROID_NDK_HOME `
+                -EigenIncludeDir $env:EIGEN_INC -Abi $abi `
+                -OutDir "android/app/src/main/jniLibs/$abi" *>&1 | ForEach-Object { $_.ToString() }
+            } catch {
+              $failed = $true
+              $log += "TERMINATING: $($_.Exception.Message)"
+              $log += "AT: $($_.InvocationInfo.PositionMessage)"
+            }
+            $log | ForEach-Object { Write-Host $_ }
+            if ($failed -or $LASTEXITCODE -ne 0) {
+              $log | Select-Object -Last 80 | ForEach-Object { "::error::$_" }
+              exit 1
+            }
           }
-          $log | ForEach-Object { Write-Host $_ }
-          if ($failed -or $LASTEXITCODE -ne 0) {
-            $log | Select-Object -Last 80 | ForEach-Object { "::error::$_" }
-            exit 1
+
+      - name: Verify engine binaries (arch)
+        shell: pwsh
+        run: |
+          foreach ($abi in @('arm64-v8a', 'armeabi-v7a')) {
+            $so = "android/app/src/main/jniLibs/$abi/libkatago.so"
+            if (-not (Test-Path -LiteralPath $so)) { throw "缺少 $so" }
+            $hdr = (file $so 2>&1) -join "`n"
+            Write-Host "---- $so ----`n$hdr"
           }
 
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64
+      - name: Build release APKs (split per ABI)
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: miaogo-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-*-release.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -110,5 +125,6 @@ jobs:
           name: MiaoGo ${{ github.ref_name }}
           body: |
             ## MiaoGo ${{ github.ref_name }}
-            单 ABI（arm64-v8a）Release 包。See CHANGELOG.md for details.
-          files: build/app/outputs/flutter-apk/app-release.apk
+            多 ABI（arm64-v8a / armeabi-v7a）Release 包，请按机型选择对应 APK。
+            See CHANGELOG.md for details.
+          files: build/app/outputs/flutter-apk/app-*-release.apk

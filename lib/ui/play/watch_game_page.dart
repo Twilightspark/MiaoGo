@@ -9,7 +9,6 @@ import 'package:miaogo/core/rank.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/engine/analysis.dart';
-import 'package:miaogo/engine/difficulty.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/game/career.dart';
@@ -55,15 +54,9 @@ class WatchGamePage extends ConsumerStatefulWidget {
 /// 观赛设置页可按「棋手落子时间」覆盖；未指定时沿用本默认值。
 const Duration kWatchMinMoveGap = Duration(seconds: 10);
 
-/// 观赛「领地分析」单局面搜索预算（大模型，短促即可，避免影响落子节奏）。
-const EngineDifficulty _kWatchAnalysisDifficulty = EngineDifficulty(
-  rankIndex: 26,
-  maxVisits: 250,
-  maxTimeMs: 2000,
-  temperature: 0.0,
-  rootNoise: 0,
-  topK: 1,
-);
+/// 观赛「领地分析」单局面搜索预算（中性分析参数，短促即可，避免影响落子节奏）。
+const int _kWatchAnalysisVisits = 250;
+const int _kWatchAnalysisTimeMs = 2000;
 
 class _WatchGamePageState extends ConsumerState<WatchGamePage> {
   late String _blackName;
@@ -219,12 +212,13 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     }
     final toMove = s.turn;
     try {
-      final r = await engine.searchAndAnalyze(
+      final r = await engine.searchAnalysis(
         board: s.board.clone(),
         toMove: toMove,
         rule: s.rule,
         komi: s.komi,
-        difficulty: _kWatchAnalysisDifficulty,
+        maxVisits: _kWatchAnalysisVisits,
+        maxTimeMs: _kWatchAnalysisTimeMs,
         ownership: true,
       );
       if (!mounted || !_analysisEnabled) return;

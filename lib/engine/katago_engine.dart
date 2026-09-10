@@ -55,21 +55,20 @@ class KataGoEngine {
   static Future<KataGoEngine> launch({
     required String binaryPath,
     required String modelPath,
+    String? humanModelPath,
     required String configPath,
     String? workingDirectory,
     List<String> extraArgs = const [],
     Duration initialTimeout = const Duration(seconds: 120),
   }) async {
+    final args = <String>['gtp', '-model', modelPath];
+    if (humanModelPath != null) {
+      args.addAll(['-human-model', humanModelPath]);
+    }
+    args.addAll(['-config', configPath, ...extraArgs]);
     final process = await Process.start(
       binaryPath,
-      [
-        'gtp',
-        '-model',
-        modelPath,
-        '-config',
-        configPath,
-        ...extraArgs,
-      ],
+      args,
       workingDirectory: workingDirectory,
     );
     final stderrTail = <String>[];
@@ -100,8 +99,9 @@ class KataGoEngine {
   int? _boardSize;
   GoRule? _rule;
   double? _komi;
-  int? _maxVisits;
-  double? _maxTimeSec;
+
+  /// 最近一次已应用的难度档（避免每手重复下发；分析态会清空）。
+  int? _appliedRank;
 
   /// 当前已应用规则上下文（供诊断）。
   GoRule? get activeRule => _rule;
@@ -141,19 +141,74 @@ class KataGoEngine {
     await _ok(await _client.send(sb.toString()), 'set_position');
   }
 
-  /// 应用难度参数（maxVisits / maxTime）。
+  /// 应用 Human SL 对弈参数（按 [diff] 档位），切换到人类棋风选点。
+  ///
+  /// 同一档位重复调用直接返回；分析态（[applyAnalysisParams]）会清空缓存，
+  /// 保证对弈前重新下发。
   Future<void> applyDifficulty(EngineDifficulty diff) async {
-    if (_maxVisits != diff.maxVisits) {
-      await _ok(await _client.send('kata-set-param maxVisits ${diff.maxVisits}'),
-          'kata-set-param maxVisits');
-      _maxVisits = diff.maxVisits;
-    }
-    final t = diff.maxTimeMs / 1000.0;
-    if (_maxTimeSec != t) {
-      await _ok(
-          await _client.send('kata-set-param maxTime ${_fmtNum(t)}'),
-          'kata-set-param maxTime');
-      _maxTimeSec = t;
+    if (_appliedRank == diff.rankIndex) return;
+    await _setParams({
+      'humanSLProfile': diff.humanSLProfile,
+      'humanSLChosenMoveProp': 1.0,
+      'humanSLChosenMoveIgnorePass': true,
+      'humanSLChosenMovePiklLambda': diff.piklLambda,
+      'humanSLRootExploreProbWeightless': diff.rootExploreProbWeightless,
+      'humanSLCpuctPermanent': diff.cpuctPermanent,
+      'chosenMoveTemperatureEarly': diff.chosenMoveTemperatureEarly,
+      'chosenMoveTemperature': diff.chosenMoveTemperature,
+      'chosenMoveTemperatureHalflife': diff.chosenMoveTemperatureHalflife,
+      'chosenMoveTemperatureOnlyBelowProb':
+          diff.chosenMoveTemperatureOnlyBelowProb,
+      'maxVisits': diff.maxVisits,
+      'maxTime': diff.maxTimeMs / 1000.0,
+      // 人类棋风：关闭几项增强搜索强度的特性（官方 human 配置）。
+      'useNoisePruning': false,
+      'useUncertainty': false,
+      'subtreeValueBiasFactor': 0.0,
+      'useLcbForSelection': false,
+    });
+    _appliedRank = diff.rankIndex;
+  }
+
+  /// 恢复分析态参数：关闭 Human SL 搜索偏置，恢复默认强度特性与搜索上限。
+  ///
+  /// [maxVisits]/[maxTimeSec] 默认接近无限，供 `kata-analyze` 持续流式输出；
+  /// 单局面一次性分析请传有限预算（见 [searchAnalysis]）。
+  Future<void> applyAnalysisParams({
+    int maxVisits = 100000000,
+    double maxTimeSec = 100000000.0,
+  }) async {
+    await _setParams({
+      'humanSLChosenMoveProp': 0.0,
+      'humanSLRootExploreProbWeightless': 0.0,
+      'humanSLRootExploreProbWeightful': 0.0,
+      'humanSLPlaExploreProbWeightless': 0.0,
+      'humanSLOppExploreProbWeightless': 0.0,
+      'useNoisePruning': true,
+      'useUncertainty': true,
+      'subtreeValueBiasFactor': 0.45,
+      'useLcbForSelection': true,
+      'maxVisits': maxVisits,
+      'maxTime': maxTimeSec,
+    });
+    _appliedRank = null;
+  }
+
+  /// 批量设置引擎参数（`kata-set-params` 单条 JSON，减少往返）。
+  Future<void> _setParams(Map<String, Object> params) async {
+    final json = jsonEncode(params);
+    await _ok(await _client.send('kata-set-params $json'), 'kata-set-params');
+  }
+
+  /// 是否已加载 Human SL 模型（`kata-get-models` 自检，失败返回 false）。
+  Future<bool> hasHumanModel() async {
+    final r = await _client.send('kata-get-models');
+    if (!r.ok) return false;
+    try {
+      final list = jsonDecode(r.body) as List<dynamic>;
+      return list.any((m) => m is Map && m['usesHumanSLProfile'] == true);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -170,10 +225,9 @@ class KataGoEngine {
     }
   }
 
-  /// 单次搜索：返回最近一次分析更新 + 引擎自选着法（`play <move>`）。
+  /// 对弈搜索：应用 [difficulty]（Human SL 参数）后单次搜索。
   ///
-  /// 内部流程：`set_position` → `kata-search_analyze <color> <interval>[ ownership true]`
-  /// → 跳过 ack（`= `）后逐行收集 `info`，直至 `play <move>` 行。
+  /// 返回最近一次分析更新 + 引擎自选着法（`play <move>`，含 `pass`/`resign`）。
   Future<({AnalysisUpdate? update, String? chosen})> searchAndAnalyze({
     required GoBoard board,
     required PlayerColor toMove,
@@ -183,9 +237,54 @@ class KataGoEngine {
     bool ownership = false,
     int intervalMs = 100,
   }) async {
+    await applyDifficulty(difficulty);
+    return _runSearch(
+      board: board,
+      toMove: toMove,
+      rule: rule,
+      komi: komi,
+      ownership: ownership,
+      intervalMs: intervalMs,
+    );
+  }
+
+  /// 单局面一次性分析搜索：中性参数 + 有限预算（[maxVisits]/[maxTimeMs]）。
+  ///
+  /// 用于胜率曲线采样 / 观赛领地评估等，避免套用对手段位的 Human SL 参数。
+  Future<({AnalysisUpdate? update, String? chosen})> searchAnalysis({
+    required GoBoard board,
+    required PlayerColor toMove,
+    required GoRule rule,
+    required double komi,
+    required int maxVisits,
+    required int maxTimeMs,
+    bool ownership = false,
+    int intervalMs = 100,
+  }) async {
+    await applyAnalysisParams(
+        maxVisits: maxVisits, maxTimeSec: maxTimeMs / 1000.0);
+    return _runSearch(
+      board: board,
+      toMove: toMove,
+      rule: rule,
+      komi: komi,
+      ownership: ownership,
+      intervalMs: intervalMs,
+    );
+  }
+
+  /// 搜索执行：`set_position` → `kata-search_analyze <color> <interval>[ ownership true]`
+  /// → 跳过 ack（`= `）后逐行收集 `info`，直至 `play <move>` 行。
+  Future<({AnalysisUpdate? update, String? chosen})> _runSearch({
+    required GoBoard board,
+    required PlayerColor toMove,
+    required GoRule rule,
+    required double komi,
+    bool ownership = false,
+    int intervalMs = 100,
+  }) async {
     await ensureConfigured(boardSize: board.size, rule: rule, komi: komi);
     await setPosition(board);
-    await applyDifficulty(difficulty);
 
     final parser = KataAnalyzeParser(boardSize: board.size);
     final color = toMove == PlayerColor.black ? 'b' : 'w';
@@ -215,8 +314,8 @@ class KataGoEngine {
   /// 持续分析（实时热力图/AI 建议）：返回会话，可多次 [AnalysisSession.updates]
   /// 订阅直至 [AnalysisSession.stop]。
   ///
-  /// 注：不套用难度搜索上限（maxVisits/maxTime）——实时覆盖层面向人类复盘，
-  /// 应持续输出稳定评估；上限会瞬间结束分析导致无流式更新。
+  /// 进入前先 [applyAnalysisParams]（中性参数 + 近无限上限）——实时覆盖层面向
+  /// 人类复盘，应持续输出稳定评估，且不得残留对手段位的 Human SL 搜索偏置。
   AnalysisSession startAnalysis({
     required GoBoard board,
     required PlayerColor toMove,
@@ -233,6 +332,7 @@ class KataGoEngine {
     var cancelled = false;
     var acked = false;
     Future<void> readLoop() async {
+      await applyAnalysisParams();
       await ensureConfigured(boardSize: board.size, rule: rule, komi: komi);
       await setPosition(board);
       await io.write(cmd);

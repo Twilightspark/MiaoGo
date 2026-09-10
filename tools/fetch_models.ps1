@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
   KataGo 模型获取脚本（MiaoGo）。
-  下载双模型到 assets/katago/：
-    - kata1-b6c96-s175395328-d26788732.txt.gz          约 5MB gz，负责 18级~1级（级位对弈）
-    - kata1-b18c384nbt-s9996604416-d4316597426.bin.gz   约 98MB gz，负责 1段~9段 与落点分析
+  下载单引擎所需模型到 assets/katago/：
+    - kata1-b18c384nbt-s9996604416-d4316597426.bin.gz   约 98MB gz，主模型：落点分析
+    - b18c384nbt-humanv0.bin.gz                        约 95MB gz，Human SL：18级~9段拟人对手
   模型按体积红线不入 git（.gitignore: assets/katago/*.gz），干净克隆构建前须先执行本脚本。
   Copyright/许可：模型版权归 David J Wu（lightvector），见 THIRD_PARTY_NOTICES.md。
 
@@ -34,14 +34,14 @@ Set-StrictMode -Version 3.0
 # 模型名 → (URL, 期望 sha256, 大小提示)
 $Models = @(
   @{
-    Name = 'kata1-b6c96-s175395328-d26788732.txt.gz'
-    Url  = 'https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b6c96-s175395328-d26788732.txt.gz'
-    Sha256 = '48D6754DE3C4754F95BF6A5CA40957A49E5E915AAAEEDE133A17B9CCF8FA5FCB'
-  },
-  @{
     Name = 'kata1-b18c384nbt-s9996604416-d4316597426.bin.gz'
     Url  = 'https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz'
     Sha256 = '9D7A6AFED8FF5B74894727E156F04F0CD36060A24824892008FBB6E0CBA51F1D'
+  },
+  @{
+    Name = 'b18c384nbt-humanv0.bin.gz'
+    Url  = 'https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz'
+    Sha256 = '637746E44F0EFE00AD1245A50AA9BBF0716EFE364C43965EAD97BD6835D84AB5'
   }
 )
 
