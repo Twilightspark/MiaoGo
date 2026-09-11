@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/settings/settings_common.dart';
 
 /// 修改用户名页：从设置页右侧滑出，最上方为名称输入框。
@@ -18,8 +19,9 @@ class _EditNamePageState extends ConsumerState<EditNamePage> {
   @override
   void initState() {
     super.initState();
-    _controller =
-        TextEditingController(text: ref.read(userProfileProvider).name);
+    _controller = TextEditingController(
+      text: ref.read(userProfileProvider).name,
+    );
   }
 
   @override
@@ -50,33 +52,39 @@ class _EditNamePageState extends ConsumerState<EditNamePage> {
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            Card(
-              elevation: 0,
-              margin: EdgeInsets.zero,
-              color: theme.colorScheme.surfaceContainerHighest,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLength: 12,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _save(),
-                  decoration: const InputDecoration(
-                    labelText: '名称',
-                    border: InputBorder.none,
-                    counterText: '',
+        child: CenteredContent(
+          maxWidth: 500,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            children: [
+              Card(
+                elevation: 0,
+                margin: EdgeInsets.zero,
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    maxLength: 12,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _save(),
+                    decoration: const InputDecoration(
+                      labelText: '名称',
+                      border: InputBorder.none,
+                      counterText: '',
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

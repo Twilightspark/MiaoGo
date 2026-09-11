@@ -12,6 +12,7 @@ import 'package:miaogo/storage/pending_game_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/ui/common/rank_badge.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/play/game_page.dart';
 
 /// 大赛路线图页：横向四列 8强→4强→决赛→冠军。
@@ -26,8 +27,7 @@ class TournamentBracketPage extends ConsumerStatefulWidget {
       _TournamentBracketPageState();
 }
 
-class _TournamentBracketPageState
-    extends ConsumerState<TournamentBracketPage> {
+class _TournamentBracketPageState extends ConsumerState<TournamentBracketPage> {
   static const _roundNames = ['1/4 决赛', '半决赛', '决赛'];
   bool _dialogShown = false;
 
@@ -47,9 +47,9 @@ class _TournamentBracketPageState
         ? ref.read(danEngineStatusProvider) == EngineStatus.ready
         : ref.read(engineStatusProvider) == EngineStatus.ready;
     if (!ready) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${isDan ? '大模型（段位）' : '引擎'}未就绪，请稍后再试'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${isDan ? '大模型（段位）' : '引擎'}未就绪，请稍后再试')),
+      );
       return;
     }
 
@@ -62,26 +62,29 @@ class _TournamentBracketPageState
         break;
       }
     }
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => pending != null
-          ? GamePage.resume(pending: pending)
-          : GamePage(
-              size: tournament.boardSize,
-              rule: tournament.rule,
-              komi: tournament.komi,
-              humanColor: PlayerColor.black,
-              difficulty: opponent.rankIndex,
-              opponentName: opponent.name,
-              source: GameSource.career,
-              tournamentId: tournament.id,
-              moveStyle: ref.read(settingsProvider).moveStyle,
-            ),
-    ));
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => pending != null
+            ? GamePage.resume(pending: pending)
+            : GamePage(
+                size: tournament.boardSize,
+                rule: tournament.rule,
+                komi: tournament.komi,
+                humanColor: PlayerColor.black,
+                difficulty: opponent.rankIndex,
+                opponentName: opponent.name,
+                source: GameSource.career,
+                tournamentId: tournament.id,
+                moveStyle: ref.read(settingsProvider).moveStyle,
+              ),
+      ),
+    );
     if (!mounted) return;
     final game = ref.read(gameControllerProvider);
     if (!game.finished) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('本局未完成，未记录胜负')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('本局未完成，未记录胜负')));
       return;
     }
     final won = game.winner == game.humanColor;
@@ -93,16 +96,21 @@ class _TournamentBracketPageState
     if (result.complete) {
       _showSettleDialog(result, placement, points);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.playerWon
-            ? '晋级${_roundNames[result.round]}！'
-            : '本局失利'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.playerWon ? '晋级${_roundNames[result.round]}！' : '本局失利',
+          ),
+        ),
+      );
     }
   }
 
   Future<void> _showSettleDialog(
-      CareerAdvanceResult result, int placement, int points) async {
+    CareerAdvanceResult result,
+    int placement,
+    int points,
+  ) async {
     if (_dialogShown) return;
     _dialogShown = true;
     await showDialog<void>(
@@ -119,7 +127,7 @@ class _TournamentBracketPageState
           result.champion
               ? '冠军奖励 +$points 积分'
               : '止步${careerPlacementLabel(placement)}'
-                  '${points > 0 ? '，获得 +$points 积分' : '，本赛无积分'}',
+                    '${points > 0 ? '，获得 +$points 积分' : '，本赛无积分'}',
           textAlign: TextAlign.center,
         ),
         actions: [
@@ -145,35 +153,40 @@ class _TournamentBracketPageState
     final player = tournament.player!;
     final currentRound = tournament.currentRound;
     return Scaffold(
-      appBar: AppBar(title: Text(tournament.name, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(
+        title: Text(tournament.name, overflow: TextOverflow.ellipsis),
+      ),
       body: SafeArea(
-        child: Column(
-          children: [
-            _TournamentHeader(tournament: tournament),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var round = 0; round < 3; round++)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: _BracketRoundColumn(
-                          name: _roundNames[round],
-                          matches: tournament.matchesInRound(round),
-                          tournament: tournament,
-                          playerId: player.id,
-                          onPlay: round == currentRound ? _playMatch : null,
+        child: CenteredContent(
+          maxWidth: 1200,
+          child: Column(
+            children: [
+              _TournamentHeader(tournament: tournament),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var round = 0; round < 3; round++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: _BracketRoundColumn(
+                            name: _roundNames[round],
+                            matches: tournament.matchesInRound(round),
+                            tournament: tournament,
+                            playerId: player.id,
+                            onPlay: round == currentRound ? _playMatch : null,
+                          ),
                         ),
-                      ),
-                    _ChampionColumn(tournament: tournament),
-                  ],
+                      _ChampionColumn(tournament: tournament),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -291,7 +304,8 @@ class _BracketMatchCard extends StatelessWidget {
     final b = match.playerBId.isEmpty
         ? null
         : tournament.playerById(match.playerBId);
-    final canPlay = !match.decided && match.involves(playerId) && onPlay != null;
+    final canPlay =
+        !match.decided && match.involves(playerId) && onPlay != null;
     return SizedBox(
       width: 200,
       child: Card(
@@ -312,8 +326,9 @@ class _BracketMatchCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
                         'VS',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: GoColors.textSecondary),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: GoColors.textSecondary,
+                        ),
                       ),
                     ),
                     Expanded(child: Divider(color: GoColors.outlineVariant)),
@@ -357,8 +372,9 @@ class _PlayerRow extends StatelessWidget {
         height: 24,
         child: Text(
           '待定',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: GoColors.textSecondary),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: GoColors.textSecondary,
+          ),
         ),
       );
     }
@@ -375,8 +391,10 @@ class _PlayerRow extends StatelessWidget {
           Expanded(
             child: Text(
               p.name,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: color, fontWeight: weight),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: color,
+                fontWeight: weight,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -391,8 +409,9 @@ class _PlayerRow extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             p.nationality.label,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -409,8 +428,9 @@ class _ChampionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final champion =
-        tournament.championId == null ? null : tournament.playerById(tournament.championId!);
+    final champion = tournament.championId == null
+        ? null
+        : tournament.playerById(tournament.championId!);
     return SizedBox(
       width: 200,
       child: Column(
@@ -436,17 +456,16 @@ class _ChampionColumn extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.emoji_events,
-                    color: GoColors.wood,
-                    size: 22,
-                  ),
+                  Icon(Icons.emoji_events, color: GoColors.wood, size: 22),
                   const SizedBox(width: 8),
                   Expanded(
                     child: champion == null
-                        ? Text('待定',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: GoColors.textSecondary))
+                        ? Text(
+                            '待定',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: GoColors.textSecondary,
+                            ),
+                          )
                         : Text(
                             champion.name,
                             style: theme.textTheme.titleSmall?.copyWith(

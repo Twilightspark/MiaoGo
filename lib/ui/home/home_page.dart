@@ -10,13 +10,11 @@ import 'package:miaogo/game/career.dart';
 import 'package:miaogo/game/career_controller.dart';
 import 'package:miaogo/storage/checkin_store.dart';
 import 'package:miaogo/storage/pending_game_store.dart';
-import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/storage/user_store.dart';
-import 'package:miaogo/study/daily_problems.dart';
-import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/common/app_icon.dart';
 import 'package:miaogo/ui/common/avatar.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/home/daily_session_page.dart';
 import 'package:miaogo/ui/play/ai_setup_page.dart';
 import 'package:miaogo/ui/play/game_page.dart';
@@ -40,96 +38,150 @@ class HomePage extends ConsumerWidget {
     final records = ref.watch(recordStoreProvider);
     final career = ref.watch(careerControllerProvider);
     final checkin = ref.watch(checkinStoreProvider);
-    final daily = ref.watch(dailyRoundProgressProvider);
     final pendingGames = ref.watch(pendingGameStoreProvider);
     final quickPending = _pendingQuick(pendingGames);
     final careerPending = career.active == null
         ? null
         : _pendingCareer(pendingGames, career.active!.id);
+    final checkedInToday = checkin.completedDays.contains(
+      checkinDateKey(DateTime.now()),
+    );
 
-    // 本轮 5 题全部做过 → 记录打卡（幂等）。
-    ref.listen<({int done, int total, bool complete})>(
-        dailyRoundProgressProvider, (prev, next) {
-      if (next.complete) {
-        ref.read(checkinStoreProvider.notifier).markToday();
-      }
-    });
+    final header = _HomeHeader(profile: profile);
+    final featureCards = <Widget>[
+      _StatsCard(
+        checkinDays: checkin.count,
+        gameCount: records.length,
+        careerPoints: profile.careerPoints,
+        rankName: RankSystem.rankName(profile.rankIndex),
+      ),
+      const SizedBox(height: 14),
+      _DailyProblemCard(
+        checkedIn: checkedInToday,
+        onStart: () => _push(context, const DailySessionPage()),
+      ),
+      const SizedBox(height: 14),
+      _QuickPlayCard(
+        resumable: quickPending != null,
+        onStart: () => _push(context, const AISetupPage()),
+        onContinue: () {
+          final p = quickPending;
+          if (p == null) return;
+          _resumeQuick(context, ref, p);
+        },
+      ),
+      const SizedBox(height: 14),
+      _CurrentTournamentCard(
+        career: career,
+        resumable: careerPending != null,
+        onContinue: () => _push(context, const TournamentBracketPage()),
+        onSignUp: () => _showSignUpDialog(context, ref),
+      ),
+      const SizedBox(height: 14),
+      _WatchCard(onStart: () => _push(context, const WatchSetupPage())),
+    ];
+    final quickArea = <Widget>[
+      const _SectionLabel('快捷入口'),
+      const SizedBox(height: 10),
+      _QuickEntryRow(),
+    ];
+    final historySliver = _HistorySliver(
+      records: records,
+      history: career.history,
+    );
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 顶部用户区固定不动，仅下方内容随历史记录一起滚动。
-            _HomeHeader(profile: profile),
-            Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _StatsCard(
-                            checkinDays: checkin.count,
-                            gameCount: records.length,
-                            careerPoints: profile.careerPoints,
-                            rankName: RankSystem.rankName(profile.rankIndex),
-                          ),
-                          const SizedBox(height: 14),
-                          _DailyProblemCard(
-                            done: daily.total == 0 ? 0 : daily.done,
-                            total: daily.total,
-                            complete: daily.complete,
-                            onStart: () => _openDaily(context, ref),
-                          ),
-                          const SizedBox(height: 14),
-                          _QuickPlayCard(
-                            resumable: quickPending != null,
-                            onStart: () =>
-                                _push(context, const AISetupPage()),
-                            onContinue: () {
-                              final p = quickPending;
-                              if (p == null) return;
-                              _resumeQuick(context, ref, p);
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          _CurrentTournamentCard(
-                            career: career,
-                            resumable: careerPending != null,
-                            onContinue: () => _push(
-                                context, const TournamentBracketPage()),
-                            onSignUp: () => _showSignUpDialog(context, ref),
-                          ),
-                          const SizedBox(height: 14),
-                          _WatchCard(
-                            onStart: () =>
-                                _push(context, const WatchSetupPage()),
-                          ),
-                          const SizedBox(height: 20),
-                          const _SectionLabel('快捷入口'),
-                          const SizedBox(height: 10),
-                          _QuickEntryRow(),
-                          const SizedBox(height: 20),
-                          const _SectionLabel('历史记录'),
-                          const SizedBox(height: 10),
-                        ],
-                      ),
+    // 竖屏：顶栏固定，功能卡与历史记录同列滚动。
+    final portrait = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        Expanded(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...featureCards,
+                      const SizedBox(height: 20),
+                      ...quickArea,
+                      const SizedBox(height: 20),
+                      const _SectionLabel('历史记录'),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+              ),
+              historySliver,
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    // 横屏 / 平板：通栏顶栏 + 左右两栏（左功能卡，右功能区 + 可滚动历史）。
+    final wide = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        Expanded(
+          child: CenteredContent(
+            maxWidth: 1100,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 8, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: featureCards,
                     ),
                   ),
-                  _HistorySliver(
-                    records: records,
-                    history: career.history,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 16, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: quickArea,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(8, 0, 16, 0),
+                        child: _SectionLabel('历史记录'),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: CustomScrollView(
+                          slivers: [
+                            historySliver,
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 24),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
+    );
+
+    return Scaffold(
+      body: SafeArea(child: isWideLayout(context) ? wide : portrait),
     );
   }
 
@@ -148,29 +200,16 @@ class HomePage extends ConsumerWidget {
   /// 首页「快速对弈 → 继续」：跳过匹配设置，直接从存档续弈。
   void _resumeQuick(BuildContext context, WidgetRef ref, PendingGame pending) {
     if (!_engineReadyFor(ref, pending.difficulty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('引擎未就绪，请稍后再试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('引擎未就绪，请稍后再试')));
       return;
     }
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => GamePage.resume(pending: pending),
-    ));
-  }
-
-  /// 进入每日打卡：本轮已完成时先重新抽一轮，再进入。
-  void _openDaily(BuildContext context, WidgetRef ref) {
-    if (ref.read(dailyRoundProgressProvider).complete) {
-      final library = ref.read(problemLibraryProvider).value;
-      if (library != null) {
-        ref.read(dailyStoreProvider.notifier).startNextRound(
-              library: library.problems,
-              rankIndex: ref.read(userProfileProvider).rankIndex,
-              progress: ref.read(problemStoreProvider),
-            );
-      }
-    }
-    _push(context, const DailySessionPage());
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GamePage.resume(pending: pending),
+      ),
+    );
   }
 
   void _showSignUpDialog(BuildContext context, WidgetRef ref) {
@@ -226,8 +265,10 @@ class _HomeHeader extends StatelessWidget {
           ),
           IconButton(
             key: const ValueKey('home_settings'),
-            icon: Icon(Icons.settings_outlined,
-                color: theme.colorScheme.onSurfaceVariant),
+            icon: Icon(
+              Icons.settings_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             tooltip: '设置',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
@@ -313,15 +354,20 @@ class _StatCell extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              )),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -362,17 +408,23 @@ class _FeatureCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: GoColors.textSecondary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: GoColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -385,18 +437,12 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-/// 每日一题：进度 + 开始做题按钮。
+/// 每日一题：打卡状态 + 做题按钮。
 class _DailyProblemCard extends StatelessWidget {
-  const _DailyProblemCard({
-    required this.done,
-    required this.total,
-    required this.complete,
-    required this.onStart,
-  });
+  const _DailyProblemCard({required this.checkedIn, required this.onStart});
 
-  final int done;
-  final int total;
-  final bool complete;
+  /// 今日是否已打卡。
+  final bool checkedIn;
   final VoidCallback onStart;
 
   @override
@@ -405,12 +451,12 @@ class _DailyProblemCard extends StatelessWidget {
       asset: AppIcon.daily,
       color: GoColors.pine,
       title: '每日一题',
-      subtitle: complete ? '今日已完成，点击继续练习' : '今日进度 $done/$total',
+      subtitle: checkedIn ? '今日已打卡，可再来一组' : '每日 5 题，完成打卡',
       button: FilledButton.icon(
         key: const ValueKey('home_daily_start'),
         onPressed: onStart,
         icon: const Icon(Icons.play_arrow, size: 18),
-        label: Text(complete ? '继续' : '做题'),
+        label: const Text('做题'),
       ),
     );
   }
@@ -539,11 +585,14 @@ class _SignUpDialog extends StatelessWidget {
                 key: ValueKey('signup_option_${t.boardSize}'),
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.emoji_events, color: GoColors.wood),
-                title: Text(t.name,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                title: Text(
+                  t.name,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(
                   '${t.boardSize} 路 · ${t.rule.label}规则 · 8 人淘汰赛',
                   style: theme.textTheme.bodySmall,
@@ -572,13 +621,10 @@ class _QuickEntryRow extends StatelessWidget {
   const _QuickEntryRow();
 
   static const _entries = <_QuickEntry>[
-    _QuickEntry(
-        AppIcon.basics, '入门', GoColors.pine, BeginnerGuidePage.new),
+    _QuickEntry(AppIcon.basics, '入门', GoColors.pine, BeginnerGuidePage.new),
     _QuickEntry(AppIcon.joseki, '定式', GoColors.wood, JosekiPracticePage.new),
-    _QuickEntry(
-        AppIcon.library, '题库', GoColors.pineDark, ProblemListPage.new),
-    _QuickEntry(
-        AppIcon.record, '棋谱', GoColors.woodDark, RecordHomePage.new),
+    _QuickEntry(AppIcon.library, '题库', GoColors.pineDark, ProblemListPage.new),
+    _QuickEntry(AppIcon.record, '棋谱', GoColors.woodDark, RecordHomePage.new),
   ];
 
   @override
@@ -595,22 +641,28 @@ class _QuickEntryRow extends StatelessWidget {
           return InkWell(
             key: ValueKey('home_quick_entry_${e.label}'),
             borderRadius: BorderRadius.circular(16),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => e.builder()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => e.builder())),
             child: SizedBox(
               width: 72,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   AppIconTile(
-                      asset: e.asset, color: e.color, tile: 48, iconSize: 26),
+                    asset: e.asset,
+                    color: e.color,
+                    tile: 48,
+                    iconSize: 26,
+                  ),
                   const SizedBox(height: 8),
-                  Text(e.label,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: GoColors.textPrimary,
-                      )),
+                  Text(
+                    e.label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: GoColors.textPrimary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -652,10 +704,9 @@ class _HistorySliver extends ConsumerWidget {
             child: Text(
               '暂无对局与竞赛记录，去下一盘棋吧',
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: GoColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: GoColors.textSecondary),
             ),
           ),
         ),
@@ -698,9 +749,11 @@ class _HistoryCompItem extends _HistoryItem {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final games = records
-        .where((r) =>
-            r.tournamentId == result.tournamentId &&
-            r.source == GameSource.career)
+        .where(
+          (r) =>
+              r.tournamentId == result.tournamentId &&
+              r.source == GameSource.career,
+        )
         .toList();
     return _CompHistoryCard(result: result, games: games);
   }
@@ -726,18 +779,21 @@ class _GameHistoryCard extends ConsumerWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: AppIconTile(
-            asset: AppIcon.history,
-            color: GoColors.pineDark,
-            tile: 40,
-            iconSize: 22),
-        title: Text(record.opponentName,
-            style:
-                theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+          asset: AppIcon.history,
+          color: GoColors.pineDark,
+          tile: 40,
+          iconSize: 22,
+        ),
+        title: Text(
+          record.opponentName,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Text(
           '${_fmtShortDate(record.date)} · ${record.boardSize} 路 · '
           '${record.rule.label} · ${record.moveCount} 手',
@@ -746,11 +802,13 @@ class _GameHistoryCard extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(record.result.label,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: resultColor,
-                  fontWeight: FontWeight.bold,
-                )),
+            Text(
+              record.result.label,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: resultColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right, size: 18),
           ],
@@ -761,27 +819,28 @@ class _GameHistoryCard extends ConsumerWidget {
   }
 
   Future<void> _openReview(BuildContext context, WidgetRef ref) async {
-    final content =
-        await ref.read(recordStoreProvider.notifier).sgfContentOf(record);
+    final content = await ref
+        .read(recordStoreProvider.notifier)
+        .sgfContentOf(record);
     if (content == null || content.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('该棋谱文件缺失，无法复盘')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('该棋谱文件缺失，无法复盘')));
       }
       return;
     }
     try {
       final game = Sgf.parse(content);
       if (!context.mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ReviewPage(game: game),
-      ));
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => ReviewPage(game: game)));
     } on FormatException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('棋谱解析失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('棋谱解析失败')));
       }
     }
   }
@@ -809,9 +868,7 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
     final withdrawn = result.withdrawn;
     final label = withdrawn
         ? '退赛'
-        : (result.champion
-            ? '冠军'
-            : careerPlacementLabel(result.placement));
+        : (result.champion ? '冠军' : careerPlacementLabel(result.placement));
     final color = withdrawn
         ? GoColors.textSecondary
         : (result.champion ? GoColors.wood : GoColors.pine);
@@ -824,18 +881,25 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
       child: Column(
         children: [
           ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 6,
+            ),
             onTap: () => setState(() => _expanded = !_expanded),
             leading: AppIconTile(
-                asset: AppIcon.competition,
-                color: GoColors.wood,
-                tile: 40,
-                iconSize: 22),
-            title: Text(result.tournamentName,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+              asset: AppIcon.competition,
+              color: GoColors.wood,
+              tile: 40,
+              iconSize: 22,
+            ),
+            title: Text(
+              result.tournamentName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             subtitle: Text(
               '${result.boardSize} 路 · ${_fmtShortDate(result.date)}'
               '${withdrawn ? '' : (result.points > 0 ? ' · +${result.points} 分' : ' · 无积分')}'
@@ -846,23 +910,25 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: color,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(label,
-                      style: const TextStyle(
-                        color: GoColors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      )),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: GoColors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 6),
-                Icon(_expanded
-                    ? Icons.expand_less
-                    : Icons.expand_more),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more),
               ],
             ),
           ),
@@ -871,22 +937,34 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
             if (games.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('暂无本赛事对局记录',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: GoColors.textSecondary)),
+                child: Text(
+                  '暂无本赛事对局记录',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: GoColors.textSecondary,
+                  ),
+                ),
               )
             else
               for (final g in games)
                 ListTile(
                   contentPadding: const EdgeInsets.only(
-                      left: 44, right: 16, top: 2, bottom: 2),
+                    left: 44,
+                    right: 16,
+                    top: 2,
+                    bottom: 2,
+                  ),
                   dense: true,
-                  leading: SvgPicture.asset(AppIcon.history,
-                      width: 16, height: 16),
-                  title: Text(g.opponentName,
-                      style: theme.textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  leading: SvgPicture.asset(
+                    AppIcon.history,
+                    width: 16,
+                    height: 16,
+                  ),
+                  title: Text(
+                    g.opponentName,
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     '${_fmtShortDate(g.date)} · ${g.rule.label} · '
                     '${g.moveCount} 手',
@@ -898,8 +976,8 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
                       color: g.result == GameResult.win
                           ? GoColors.pine
                           : (g.result == GameResult.draw
-                              ? GoColors.wood
-                              : GoColors.textSecondary),
+                                ? GoColors.wood
+                                : GoColors.textSecondary),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -912,25 +990,26 @@ class _CompHistoryCardState extends ConsumerState<_CompHistoryCard> {
   }
 
   Future<void> _openReview(BuildContext context, GameRecord record) async {
-    final content =
-        await ref.read(recordStoreProvider.notifier).sgfContentOf(record);
+    final content = await ref
+        .read(recordStoreProvider.notifier)
+        .sgfContentOf(record);
     if (!context.mounted) return;
     if (content == null || content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该棋谱文件缺失，无法复盘')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该棋谱文件缺失，无法复盘')));
       return;
     }
     try {
       final game = Sgf.parse(content);
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ReviewPage(game: game),
-      ));
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => ReviewPage(game: game)));
     } on FormatException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('棋谱解析失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('棋谱解析失败')));
       }
     }
   }
@@ -948,9 +1027,9 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -977,4 +1056,3 @@ PendingGame? _pendingCareer(List<PendingGame> list, String tournamentId) {
   }
   return null;
 }
-

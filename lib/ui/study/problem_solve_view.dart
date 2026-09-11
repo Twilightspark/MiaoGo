@@ -9,12 +9,13 @@ import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/study/problem_engine.dart';
 import 'package:miaogo/ui/board_widget.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 
 /// 单题作答会话：保存该题的求解器、正解回放与界面状态。
 class ProblemSession {
   ProblemSession(this.problem)
-      : solver = ProblemSolver(problem),
-        replayBoard = problem.initial.clone(superko: false);
+    : solver = ProblemSolver(problem),
+      replayBoard = problem.initial.clone(superko: false);
 
   final Problem problem;
   final ProblemSolver solver;
@@ -44,6 +45,7 @@ class ProblemSolveView extends ConsumerStatefulWidget {
     this.headerBuilder,
     this.onProgress,
     this.restoreProgress,
+    this.sessionOnly = false,
   });
 
   final List<Problem> problems;
@@ -51,13 +53,25 @@ class ProblemSolveView extends ConsumerStatefulWidget {
   final ValueChanged<int> onIndexChanged;
 
   /// 顶部自定义内容（如每日进度卡），随当前题号与总题数构建。
-  final Widget Function(BuildContext context, int index, int total)? headerBuilder;
+  final Widget Function(BuildContext context, int index, int total)?
+  headerBuilder;
 
-  /// 额外持久化：题目 + 主线下标 + 本局错误次数。
-  final void Function(Problem problem, int stepIndex, int attempts)? onProgress;
+  /// 额外持久化：题目 + 主线下标 + 本局错误次数 + 是否已解出。
+  final void Function(
+    Problem problem,
+    int stepIndex,
+    int attempts,
+    bool solved,
+  )?
+  onProgress;
 
   /// 恢复续做进度；返回 `(主线下标, 本局错误次数)`。
   final (int, int)? Function(Problem problem)? restoreProgress;
+
+  /// 仅依据本页会话判断「已做/已解出」，忽略 [problemStoreProvider] 的历史进度。
+  ///
+  /// 「每日一题」用它实现「退出即重置」：即便某题此前已解出，重新进入仍视为未做。
+  final bool sessionOnly;
 
   @override
   ConsumerState<ProblemSolveView> createState() => _ProblemSolveViewState();
@@ -68,16 +82,16 @@ class _ProblemSolveViewState extends ConsumerState<ProblemSolveView> {
 
   /// 取（或创建）某题的会话；首次创建时按 [ProblemSolveView.restoreProgress] 恢复。
   ProblemSession _sessionFor(Problem p) => _sessions.putIfAbsent(p.id, () {
-        final s = ProblemSession(p);
-        final restored = widget.restoreProgress?.call(p);
-        if (restored != null && (restored.$1 > 0 || restored.$2 > 0)) {
-          s.solver.restore(index: restored.$1, attempts: restored.$2);
-          if (restored.$1 > 0 && restored.$1 < p.mainline.length) {
-            s.lastPlayed = p.mainline[restored.$1].move;
-          }
-        }
-        return s;
-      });
+    final s = ProblemSession(p);
+    final restored = widget.restoreProgress?.call(p);
+    if (restored != null && (restored.$1 > 0 || restored.$2 > 0)) {
+      s.solver.restore(index: restored.$1, attempts: restored.$2);
+      if (restored.$1 > 0 && restored.$1 < p.mainline.length) {
+        s.lastPlayed = p.mainline[restored.$1].move;
+      }
+    }
+    return s;
+  });
 
   void _goTo(int index) => widget.onIndexChanged(index);
 
@@ -120,20 +134,16 @@ class _ProblemSolveViewState extends ConsumerState<ProblemSolveView> {
   void _recordSolved(ProblemSession s) {
     if (s.recorded) return;
     s.recorded = true;
-    ref.read(problemStoreProvider.notifier).recordAttempt(
-          s.problem.id,
-          solved: true,
-          attempts: s.solver.attempts,
-        );
+    ref
+        .read(problemStoreProvider.notifier)
+        .recordAttempt(s.problem.id, solved: true, attempts: s.solver.attempts);
   }
 
   void _recordWrong(ProblemSession s) {
     s.wrongRecorded = true;
-    ref.read(problemStoreProvider.notifier).recordAttempt(
-          s.problem.id,
-          solved: false,
-          attempts: 1,
-        );
+    ref
+        .read(problemStoreProvider.notifier)
+        .recordAttempt(s.problem.id, solved: false, attempts: 1);
   }
 
   void _revealSolution(ProblemSession s) {
@@ -181,6 +191,7 @@ class _ProblemSolveViewState extends ConsumerState<ProblemSolveView> {
       s.problem,
       s.solver.progressIndex,
       s.solver.attempts,
+      s.solver.solved,
     );
   }
 
@@ -197,118 +208,122 @@ class _ProblemSolveViewState extends ConsumerState<ProblemSolveView> {
     final settings = ref.watch(settingsProvider);
 
     final canPlay = !session.solver.solved && !session.showSolution;
-    final displayBoard =
-        session.showSolution ? session.replayBoard : session.solver.board;
+    final displayBoard = session.showSolution
+        ? session.replayBoard
+        : session.solver.board;
     final lastMove = session.showSolution
         ? (session.replayStep > 0
-            ? problem.solutionMoves[session.replayStep - 1]
-            : null)
+              ? problem.solutionMoves[session.replayStep - 1]
+              : null)
         : session.lastPlayed;
-    final demonstrating = session.showSolution &&
+    final demonstrating =
+        session.showSolution &&
         session.replayStep < problem.solutionMoves.length;
-    // 做对或用满三次错误机会的题目不可重做。
-    final problemDone = (progress[problem.id]?.solved ?? false) ||
+    // 做对或用满三次错误机会的题目不可重做。sessionOnly 时忽略历史进度。
+    final storedSolved = widget.sessionOnly
+        ? false
+        : (progress[problem.id]?.solved ?? false);
+    final problemDone =
+        storedSolved ||
         session.solver.solved ||
         session.solver.attempts >= kMaxProblemAttempts;
     // 用满 3 次做题机会（本局错误次数）后才可看正解。
     final canReveal = session.solver.attempts >= kMaxProblemAttempts;
     final viewport = viewportFor(problem);
 
-    return Column(
-      children: [
-        if (widget.headerBuilder != null)
+    return AdaptiveBoardLayout(
+      board: Padding(
+        padding: const EdgeInsets.all(12),
+        child: GoBoardWidget(
+          board: displayBoard,
+          lastMove: lastMove,
+          viewport: viewport,
+          selected: session.selected,
+          selectedColor: problem.toPlay,
+          enabled: canPlay,
+          onPointTapped: canPlay && settings.moveStyle == MoveStyle.confirm
+              ? (r, c) => _select(problem, r, c)
+              : null,
+          onPointDoubleTapped:
+              canPlay && settings.moveStyle == MoveStyle.doubleTap
+              ? (r, c) => _playAt(problem, r, c)
+              : null,
+        ),
+      ),
+      top: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.headerBuilder != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: widget.headerBuilder!(context, index, problems.length),
+            ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: widget.headerBuilder!(context, index, problems.length),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: PromptCard(
+              toPlay: problem.toPlay,
+              totalSteps: problem.solutionStepCount,
+            ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-          child: PromptCard(
-            toPlay: problem.toPlay,
-            totalSteps: problem.solutionStepCount,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: RoundInfo(
+              index: index,
+              total: problems.length,
+              difficulty: problem.difficulty,
+              remainingSteps: session.showSolution
+                  ? 0
+                  : session.solver.remainingSteps,
+              solved: session.solver.solved,
+              showSolution: session.showSolution,
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: RoundInfo(
-            index: index,
-            total: problems.length,
-            difficulty: problem.difficulty,
-            remainingSteps:
-                session.showSolution ? 0 : session.solver.remainingSteps,
-            solved: session.solver.solved,
-            showSolution: session.showSolution,
-          ),
-        ),
-        Expanded(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: GoBoardWidget(
-                    board: displayBoard,
-                    lastMove: lastMove,
-                    viewport: viewport,
-                    selected: session.selected,
-                    selectedColor: problem.toPlay,
-                    enabled: canPlay,
-                    onPointTapped:
-                        canPlay && settings.moveStyle == MoveStyle.confirm
-                            ? (r, c) => _select(problem, r, c)
-                            : null,
-                    onPointDoubleTapped:
-                        canPlay && settings.moveStyle == MoveStyle.doubleTap
-                            ? (r, c) => _playAt(problem, r, c)
-                            : null,
-                  ),
-                ),
+        ],
+      ),
+      bottom: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (session.feedback != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FeedbackBar(
+                text: session.feedback!,
+                good: session.feedbackGood,
               ),
             ),
-          ),
-        ),
-        if (session.feedback != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FeedbackBar(
-              text: session.feedback!,
-              good: session.feedbackGood,
+          if (canPlay &&
+              settings.moveStyle == MoveStyle.confirm &&
+              session.selected != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ConfirmBar(
+                selected: session.selected!,
+                onConfirm: () => _confirm(problem),
+                onCancel: () => setState(() => session.selected = null),
+              ),
             ),
-          ),
-        if (canPlay &&
-            settings.moveStyle == MoveStyle.confirm &&
-            session.selected != null)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ConfirmBar(
-              selected: session.selected!,
-              onConfirm: () => _confirm(problem),
-              onCancel: () => setState(() => session.selected = null),
-            ),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: demonstrating
+                ? SolutionBar(
+                    step: session.replayStep,
+                    total: problem.solutionMoves.length,
+                    onNext: () => _solutionNext(session),
+                  )
+                : ActionButtons(
+                    canPrev: index > 0,
+                    canNext: index < problems.length - 1,
+                    canReset: !problemDone,
+                    canReveal: canReveal,
+                    showSolution: session.showSolution,
+                    onPrev: () => _goTo(index - 1),
+                    onNext: () => _goTo(index + 1),
+                    onReveal: () => _revealSolution(session),
+                    onReset: () => _reset(session),
+                  ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: demonstrating
-              ? SolutionBar(
-                  step: session.replayStep,
-                  total: problem.solutionMoves.length,
-                  onNext: () => _solutionNext(session),
-                )
-              : ActionButtons(
-                  canPrev: index > 0,
-                  canNext: index < problems.length - 1,
-                  canReset: !problemDone,
-                  canReveal: canReveal,
-                  showSolution: session.showSolution,
-                  onPrev: () => _goTo(index - 1),
-                  onNext: () => _goTo(index + 1),
-                  onReveal: () => _revealSolution(session),
-                  onReset: () => _reset(session),
-                ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -382,14 +397,16 @@ class PromptCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '轮到 ${toPlay.label}方落子',
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const Spacer(),
             Text(
               '共 $totalSteps 步',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: GoColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: GoColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -423,14 +440,15 @@ class RoundInfo extends StatelessWidget {
     final statusText = showSolution
         ? '正解演示'
         : solved
-            ? '已解出'
-            : '本题还剩 $remainingSteps 步';
+        ? '已解出'
+        : '本题还剩 $remainingSteps 步';
     return Row(
       children: [
         Text(
           '第 ${index + 1} / $total 题',
-          style: theme.textTheme.titleSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(width: 8),
         Container(
@@ -511,7 +529,8 @@ class ConfirmBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = '${GoBoard.sgfCoord(selected.$1, selected.$2)}'
+    final label =
+        '${GoBoard.sgfCoord(selected.$1, selected.$2)}'
         '（${selected.$2 + 1}, ${selected.$1 + 1}）';
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -519,20 +538,9 @@ class ConfirmBar extends StatelessWidget {
         children: [
           const Icon(Icons.place_outlined, size: 18, color: GoColors.pine),
           const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              '已选 $label',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          TextButton(
-            onPressed: onCancel,
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: onConfirm,
-            child: const Text('落子'),
-          ),
+          Expanded(child: Text('已选 $label', style: theme.textTheme.bodySmall)),
+          TextButton(onPressed: onCancel, child: const Text('取消')),
+          FilledButton(onPressed: onConfirm, child: const Text('落子')),
         ],
       ),
     );
@@ -630,11 +638,7 @@ class CompactButton extends StatelessWidget {
         const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
     );
-    final child = Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
+    final child = Text(label, maxLines: 1, overflow: TextOverflow.ellipsis);
     return filled
         ? FilledButton(onPressed: onPressed, style: style, child: child)
         : OutlinedButton(onPressed: onPressed, style: style, child: child);
@@ -662,8 +666,9 @@ class SolutionBar extends StatelessWidget {
         Expanded(
           child: Text(
             '正解演示  第 $step / $total 手',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
         ),
         const SizedBox(width: 8),

@@ -6,6 +6,7 @@ import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/storage/settings_store.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/play/watch_game_page.dart';
 
 /// 休闲观赛设置页：棋手等级 / 棋盘尺寸 / 对弈规则 / 棋手落子时间 → 开始观赛。
@@ -41,15 +42,17 @@ class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
   }
 
   void _start() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => WatchGamePage(
-        size: _boardSize.size,
-        rule: _rule,
-        komi: _rule.defaultKomi,
-        rankIndex: _difficulty,
-        minMoveGap: Duration(seconds: _moveSeconds),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WatchGamePage(
+          size: _boardSize.size,
+          rule: _rule,
+          komi: _rule.defaultKomi,
+          rankIndex: _difficulty,
+          minMoveGap: Duration(seconds: _moveSeconds),
+        ),
       ),
-    ));
+    );
   }
 
   static String _moveTimeLabel(int seconds) =>
@@ -71,63 +74,64 @@ class _WatchSetupPageState extends ConsumerState<WatchSetupPage> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const _SectionLabel('棋手等级'),
-          _PillChoice<int>(
-            values: [
-              for (var i = 0; i < RankSystem.kTotalRanks; i++) i,
-            ],
-            selected: _difficulty,
-            onChanged: (v) => setState(() => _difficulty = v),
-            labelOf: RankSystem.rankName,
-            chipKeyOf: (i, _) => ValueKey('watch_rank_$i'),
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('棋盘尺寸'),
-          _PillChoice<BoardSize>(
-            values: BoardSize.values,
-            selected: _boardSize,
-            onChanged: (v) => setState(() => _boardSize = v),
-            labelOf: (v) => '${v.size} 路',
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('对弈规则'),
-          _PillChoice<GoRule>(
-            values: GoRule.values,
-            selected: _rule,
-            onChanged: (v) => setState(() => _rule = v),
-            labelOf: (v) => v.label,
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('棋手落子时间'),
-          _PillChoice<int>(
-            values: _moveTimeOptions,
-            selected: _moveSeconds,
-            onChanged: (v) => setState(() => _moveSeconds = v),
-            labelOf: _moveTimeLabel,
-          ),
-          const SizedBox(height: 16),
-          _buildStartArea(theme),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton(
-              key: const ValueKey('watch_back_home'),
-              onPressed: () =>
-                  Navigator.of(context).popUntil((route) => route.isFirst),
-              child: Text(
-                '回到首页',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
+      body: CenteredContent(
+        maxWidth: 600,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const _SectionLabel('棋手等级'),
+            _PillChoice<int>(
+              values: [for (var i = 0; i < RankSystem.kTotalRanks; i++) i],
+              selected: _difficulty,
+              onChanged: (v) => setState(() => _difficulty = v),
+              labelOf: RankSystem.rankName,
+              chipKeyOf: (i, _) => ValueKey('watch_rank_$i'),
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('棋盘尺寸'),
+            _PillChoice<BoardSize>(
+              values: BoardSize.values,
+              selected: _boardSize,
+              onChanged: (v) => setState(() => _boardSize = v),
+              labelOf: (v) => '${v.size} 路',
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('对弈规则'),
+            _PillChoice<GoRule>(
+              values: GoRule.values,
+              selected: _rule,
+              onChanged: (v) => setState(() => _rule = v),
+              labelOf: (v) => v.label,
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('棋手落子时间'),
+            _PillChoice<int>(
+              values: _moveTimeOptions,
+              selected: _moveSeconds,
+              onChanged: (v) => setState(() => _moveSeconds = v),
+              labelOf: _moveTimeLabel,
+            ),
+            const SizedBox(height: 28),
+            _buildStartArea(theme),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                key: const ValueKey('watch_back_home'),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+                child: Text(
+                  '回到首页',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -216,8 +220,8 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -276,8 +280,7 @@ class _PillChoice<T> extends StatelessWidget {
                   child: Text(
                     labelOf(value),
                     style: TextStyle(
-                      color:
-                          isSelected ? GoColors.white : GoColors.textPrimary,
+                      color: isSelected ? GoColors.white : GoColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

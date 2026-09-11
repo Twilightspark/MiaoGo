@@ -16,6 +16,7 @@ import 'package:miaogo/game/match_engine.dart';
 import 'package:miaogo/game/watch_controller.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/ui/board_widget.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/common/winrate_panel.dart';
 
 /// 休闲观赛对局页：两名本地 KataGo 棋手（同名同级）自动互弈，用户纯旁观。
@@ -96,7 +97,9 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     // 帧结束后再开局并启动自动行棋（避免在构建期修改 Provider）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(watchControllerProvider.notifier).start(
+      ref
+          .read(watchControllerProvider.notifier)
+          .start(
             size: widget.size,
             rule: widget.rule,
             komi: widget.komi,
@@ -135,19 +138,14 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     // 每次搜索前把胜率监听挂到当前选点器实例上（引擎重启后实例重建）。
     provider.winrateListener = _onAiSearchWinrate;
     _lastProvider = provider;
-    return provider.chooseMove(
-      s.board.clone(),
-      color,
-      rankIndex: s.rankIndex,
-    );
+    return provider.chooseMove(s.board.clone(), color, rankIndex: s.rankIndex);
   }
 
   /// AI 搜索完成回调（行棋方 + 其视角胜率），转黑方视角记录。
   void _onAiSearchWinrate(PlayerColor sideToMove, double winrate) {
     if (!mounted) return;
     final hand = ref.read(watchControllerProvider).moves.length;
-    _blackWinrateByHand[hand] =
-        blackPerspectiveWinrate(winrate, sideToMove);
+    _blackWinrateByHand[hand] = blackPerspectiveWinrate(winrate, sideToMove);
     setState(() {});
   }
 
@@ -184,8 +182,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
       }
       if (!mounted || epoch != _epoch) return;
 
-      final ok =
-          ref.read(watchControllerProvider.notifier).applyMove(move);
+      final ok = ref.read(watchControllerProvider.notifier).applyMove(move);
       if (!ok) return;
       _nextApplyAt = DateTime.now().add(widget.minMoveGap);
       if (ref.read(watchControllerProvider).finished) continue;
@@ -198,8 +195,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
 
   // ---- 实时分析 ----
 
-  bool get _danReady =>
-      ref.read(danEngineStatusProvider) == EngineStatus.ready;
+  bool get _danReady => ref.read(danEngineStatusProvider) == EngineStatus.ready;
 
   /// 单局面领地评估（大模型；用后归还引擎，避免与落子争抢）。
   Future<void> _refreshInfluence() async {
@@ -269,10 +265,12 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     } else {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          content: Text('再按一次返回可提前终止观赛并回到首页'),
-          duration: Duration(milliseconds: 1200),
-        ));
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('再按一次返回可提前终止观赛并回到首页'),
+            duration: Duration(milliseconds: 1200),
+          ),
+        );
     }
   }
 
@@ -357,9 +355,8 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     final save = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _WatchResultDialog(
-        state: ref.read(watchControllerProvider),
-      ),
+      builder: (_) =>
+          _WatchResultDialog(state: ref.read(watchControllerProvider)),
     );
     if (!mounted) return;
     if (save == true) {
@@ -370,9 +367,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
       Navigator.of(context).popUntil((route) => route.isFirst);
       unawaited(() async {
         await store.add(record);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('棋局已保存到棋谱')),
-        );
+        messenger.showSnackBar(const SnackBar(content: Text('棋局已保存到棋谱')));
       }());
     } else {
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -388,7 +383,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
     final re = isDraw
         ? 'Draw'
         : '${winner == PlayerColor.black ? 'B' : 'W'}+'
-            '${_fmtMargin(result?.margin)}';
+              '${_fmtMargin(result?.margin)}';
     return GameRecord(
       id: '${DateTime.now().millisecondsSinceEpoch}',
       date: DateTime.now(),
@@ -396,9 +391,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
       opponentRank: s.rankIndex,
       result: isDraw
           ? GameResult.draw
-          : (winner == PlayerColor.black
-              ? GameResult.win
-              : GameResult.loss),
+          : (winner == PlayerColor.black ? GameResult.win : GameResult.loss),
       boardSize: s.boardSize,
       rule: s.rule,
       komi: s.komi,
@@ -424,8 +417,7 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(watchControllerProvider);
-    final lastMove =
-        state.moves.isNotEmpty ? state.moves.last : null;
+    final lastMove = state.moves.isNotEmpty ? state.moves.last : null;
     final points = ([
       for (final e in _blackWinrateByHand.entries) (e.key, e.value),
     ]..sort((a, b) => a.$1.compareTo(b.$1)));
@@ -442,9 +434,9 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
           title: Text(
             '休闲观赛 · ${RankSystem.rankName(state.rankIndex)}',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           actions: [
             IconButton(
@@ -467,35 +459,32 @@ class _WatchGamePageState extends ConsumerState<WatchGamePage> {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Column(
-              children: [
-                _StatusCard(state: state),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 480),
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: GoBoardWidget(
-                          board: state.board,
-                          lastMove: lastMove,
-                          lastMoveEmphasis: true,
-                          influence:
-                              _analysisEnabled ? _influence : null,
-                          enabled: false,
-                        ),
-                      ),
-                    ),
+            child: AdaptiveBoardLayout(
+              board: GoBoardWidget(
+                board: state.board,
+                lastMove: lastMove,
+                lastMoveEmphasis: true,
+                influence: _analysisEnabled ? _influence : null,
+                enabled: false,
+              ),
+              top: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _StatusCard(state: state),
+                  const SizedBox(height: 8),
+                ],
+              ),
+              bottom: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  WinratePanel(
+                    points: points,
+                    currentHand: state.moveCount,
+                    showWhiteLine: true,
                   ),
-                ),
-                const SizedBox(height: 8),
-                WinratePanel(
-                  points: points,
-                  currentHand: state.moveCount,
-                  showWhiteLine: true,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -527,7 +516,10 @@ class _StatusCard extends StatelessWidget {
                 rankIndex: state.rankIndex,
                 color: PlayerColor.black,
                 captured: state.capturedBlack,
-                isTurn: state.thinking && !state.finished && turn == PlayerColor.black,
+                isTurn:
+                    state.thinking &&
+                    !state.finished &&
+                    turn == PlayerColor.black,
                 alignEnd: false,
               ),
             ),
@@ -536,18 +528,18 @@ class _StatusCard extends StatelessWidget {
                 Text(
                   state.finished
                       ? '对局结束'
-                      : (state.thinking
-                          ? '轮到 ${turn.label}方'
-                          : '观赛进行中'),
+                      : (state.thinking ? '轮到 ${turn.label}方' : '观赛进行中'),
                   key: const ValueKey('watch_status'),
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: GoColors.pine),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: GoColors.pine,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '第 ${state.moveCount} 手',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: GoColors.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: GoColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -557,7 +549,10 @@ class _StatusCard extends StatelessWidget {
                 rankIndex: state.rankIndex,
                 color: PlayerColor.white,
                 captured: state.capturedWhite,
-                isTurn: state.thinking && !state.finished && turn == PlayerColor.white,
+                isTurn:
+                    state.thinking &&
+                    !state.finished &&
+                    turn == PlayerColor.white,
                 alignEnd: true,
               ),
             ),
@@ -589,15 +584,17 @@ class _PlayerInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
-      mainAxisAlignment:
-          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: alignEnd
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       children: [
         if (!alignEnd) _stone(color),
         if (!alignEnd) const SizedBox(width: 8),
         Flexible(
           child: Column(
-            crossAxisAlignment:
-                alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: alignEnd
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -613,8 +610,7 @@ class _PlayerInfo extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color:
-                            isTurn ? GoColors.pine : GoColors.textPrimary,
+                        color: isTurn ? GoColors.pine : GoColors.textPrimary,
                       ),
                     ),
                   ),
@@ -626,8 +622,9 @@ class _PlayerInfo extends StatelessWidget {
               ),
               Text(
                 '${RankSystem.rankName(rankIndex)} · 提 $captured',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: GoColors.textSecondary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: GoColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -744,8 +741,9 @@ class _WatchResultDialog extends StatelessWidget {
             Center(
               child: Text(
                 result.description,
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(color: GoColors.textSecondary),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: GoColors.textSecondary,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -761,8 +759,9 @@ class _WatchResultDialog extends StatelessWidget {
             '${state.blackName} 对 ${state.whiteName} · '
             '${state.rule.label}规则 · 贴目 ${state.komi} · '
             '${state.boardSize} 路 · 共 ${state.moveCount} 手',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
         ],
       ),

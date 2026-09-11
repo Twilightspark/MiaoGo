@@ -8,6 +8,7 @@ import 'package:miaogo/core/joseki.dart';
 import 'package:miaogo/core/move.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/study/joseki_library.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 
 const int _size = 19;
 
@@ -18,8 +19,7 @@ class JosekiPracticePage extends ConsumerStatefulWidget {
   const JosekiPracticePage({super.key});
 
   @override
-  ConsumerState<JosekiPracticePage> createState() =>
-      _JosekiPracticePageState();
+  ConsumerState<JosekiPracticePage> createState() => _JosekiPracticePageState();
 }
 
 class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
@@ -38,8 +38,7 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
   /// 上次系统返回时间（双击返回判定）。
   DateTime? _lastBackAt;
 
-  MoveStyle get _moveStyle =>
-      ref.read(settingsProvider).moveStyle;
+  MoveStyle get _moveStyle => ref.read(settingsProvider).moveStyle;
 
   /// 展开当前指定角：取首手所属角；为空默认右上角（规范角）。
   String get _corner {
@@ -49,15 +48,15 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
   }
 
   /// 当前查询着法的规范串。
-  List<String> get _canonical => JosekiCoords.canonical(
-      [for (final m in _moves) (m.row!, m.col!)], _size);
+  List<String> get _canonical =>
+      JosekiCoords.canonical([for (final m in _moves) (m.row!, m.col!)], _size);
 
   void _reset() => setState(() {
-        _moves.clear();
-        _selected = null;
-        _viewing = null;
-        _step = 0;
-      });
+    _moves.clear();
+    _selected = null;
+    _viewing = null;
+    _step = 0;
+  });
 
   void _undo() {
     if (_moves.isEmpty) return;
@@ -93,8 +92,7 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
     if (sel == null) return;
     if (!_inBounds(sel.$1, sel.$2)) return;
     if (_occupied(sel.$1, sel.$2)) return;
-    final color =
-        _moves.length.isEven ? PlayerColor.black : PlayerColor.white;
+    final color = _moves.length.isEven ? PlayerColor.black : PlayerColor.white;
     setState(() {
       _moves.add(Move.point(color, sel.$1, sel.$2));
       _selected = null;
@@ -117,9 +115,9 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
   }
 
   void _exitView() => setState(() {
-        _viewing = null;
-        _step = 0;
-      });
+    _viewing = null;
+    _step = 0;
+  });
 
   void _stepPrev() {
     if (_step > 0) setState(() => _step--);
@@ -140,10 +138,12 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
     }
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('再按一次返回退出'),
-        duration: Duration(milliseconds: 1200),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('再按一次返回退出'),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
   }
 
   Future<void> _showExitDialog() async {
@@ -187,40 +187,38 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
             : SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 420),
-                          child: AspectRatio(
-                            aspectRatio: 1,
-                            child: _FullBoard(
-                              key: const ValueKey('joseki_board'),
-                              moves: _viewing == null
-                                  ? _moves
-                                  : movesInCorner(_viewing!.moves, _corner,
-                                      _size)
-                                      .take(_step)
-                                      .toList(),
-                              selected: _viewing == null ? _selected : null,
-                              hints:
-                                  _viewing == null ? _hints(library) : const [],
-                              onTap: _onPointTapped,
-                              onDrag: _onPointDrag,
-                            ),
-                          ),
+                  child: AdaptiveBoardLayout(
+                    bottomExpanded: true,
+                    board: AspectRatio(
+                      aspectRatio: 1,
+                      child: _FullBoard(
+                        key: const ValueKey('joseki_board'),
+                        moves: _viewing == null
+                            ? _moves
+                            : movesInCorner(
+                                _viewing!.moves,
+                                _corner,
+                                _size,
+                              ).take(_step).toList(),
+                        selected: _viewing == null ? _selected : null,
+                        hints: _viewing == null ? _hints(library) : const [],
+                        onTap: _onPointTapped,
+                        onDrag: _onPointDrag,
+                      ),
+                    ),
+                    bottom: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 8),
+                        if (_viewing == null) _controls(theme, library),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: _viewing == null
+                              ? _matchList(theme, library)
+                              : _viewerControls(theme),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_viewing == null) _controls(theme, library),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: _viewing == null
-                            ? _matchList(theme, library)
-                            : _viewerControls(theme),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -230,19 +228,17 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
 
   /// 查询态最高概率的推荐点位（TR 规范坐标 + 概率），映射到当前角。
   List<JosekiMoveHint> _hints(JosekiLibrary library) {
-    return recommendNext(library.entries, _canonical)
-        .where((h) {
-          final (r, c) = GoBoard.coordFromSgf(h.coord);
-          final (br, bc) = JosekiCoords.fromTr((r, c), _corner, _size);
-          return !_occupied(br, bc);
-        })
-        .toList();
+    return recommendNext(library.entries, _canonical).where((h) {
+      final (r, c) = GoBoard.coordFromSgf(h.coord);
+      final (br, bc) = JosekiCoords.fromTr((r, c), _corner, _size);
+      return !_occupied(br, bc);
+    }).toList();
   }
 
   ButtonStyle _btnStyle(ThemeData theme) => OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        side: BorderSide(color: theme.colorScheme.outline),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    side: BorderSide(color: theme.colorScheme.outline),
+  );
 
   Widget _controls(ThemeData theme, JosekiLibrary library) {
     return Row(
@@ -320,8 +316,9 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
       ],
     );
@@ -332,8 +329,9 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
       return Center(
         child: Text(
           '在棋盘上落子，下方会推荐匹配的定式',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: GoColors.textSecondary),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: GoColors.textSecondary,
+          ),
         ),
       );
     }
@@ -342,8 +340,9 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
       return Center(
         child: Text(
           '当前着法未收录到定式库，换一手试试',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: GoColors.textSecondary),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: GoColors.textSecondary,
+          ),
         ),
       );
     }
@@ -356,8 +355,10 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
           elevation: 0,
           color: theme.colorScheme.surfaceContainerHighest,
           child: ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             leading: CircleAvatar(
               radius: 22,
               backgroundColor: GoColors.woodContainer,
@@ -365,8 +366,9 @@ class _JosekiPracticePageState extends ConsumerState<JosekiPracticePage> {
             ),
             title: Text(
               m.entry.label,
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             subtitle: Text(
               '${m.summary} · 出现 ${m.entry.frequency ?? 0} 次',
@@ -403,43 +405,45 @@ class _FullBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final side = constraints.maxWidth;
-      final geometry = _BoardGeometry(side, _size);
-      return GestureDetector(
-        onTapUp: (details) {
-          final p = geometry.pointAt(details.localPosition, _size);
-          if (p == null) return;
-          onTap(p.$1, p.$2);
-        },
-        onPanStart: (details) {
-          final p = geometry.pointAt(details.localPosition, _size);
-          if (p == null) return;
-          onDrag(p.$1, p.$2);
-        },
-        onPanUpdate: (details) {
-          final p = geometry.pointAt(details.localPosition, _size);
-          if (p == null) return;
-          onDrag(p.$1, p.$2);
-        },
-        child: CustomPaint(
-          size: Size.square(side),
-          painter: _BoardPainter(
-            moves: moves,
-            selected: selected,
-            hints: hints,
-            geometry: geometry,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = constraints.maxWidth;
+        final geometry = _BoardGeometry(side, _size);
+        return GestureDetector(
+          onTapUp: (details) {
+            final p = geometry.pointAt(details.localPosition, _size);
+            if (p == null) return;
+            onTap(p.$1, p.$2);
+          },
+          onPanStart: (details) {
+            final p = geometry.pointAt(details.localPosition, _size);
+            if (p == null) return;
+            onDrag(p.$1, p.$2);
+          },
+          onPanUpdate: (details) {
+            final p = geometry.pointAt(details.localPosition, _size);
+            if (p == null) return;
+            onDrag(p.$1, p.$2);
+          },
+          child: CustomPaint(
+            size: Size.square(side),
+            painter: _BoardPainter(
+              moves: moves,
+              selected: selected,
+              hints: hints,
+              geometry: geometry,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
 class _BoardGeometry {
   _BoardGeometry(double side, int size)
-      : margin = side * 0.06,
-        cell = (side - side * 0.12) / (size - 1);
+    : margin = side * 0.06,
+      cell = (side - side * 0.12) / (size - 1);
 
   final double margin;
   final double cell;
@@ -504,15 +508,17 @@ class _BoardPainter extends CustomPainter {
     final star = Paint()..color = const Color(0xFF7A4B28);
     for (final (r, c) in GoBoard.starPoints(n)) {
       canvas.drawCircle(
-          Offset(margin + c * cell, margin + r * cell), cell * 0.1, star);
+        Offset(margin + c * cell, margin + r * cell),
+        cell * 0.1,
+        star,
+      );
     }
 
     // 棋子
     for (var i = 0; i < moves.length; i++) {
       final m = moves[i];
       if (m.isPass || m.row == null || m.col == null) continue;
-      final center = Offset(
-          margin + m.col! * cell, margin + m.row! * cell);
+      final center = Offset(margin + m.col! * cell, margin + m.row! * cell);
       _stone(canvas, m.color, center, cell);
       if (i == moves.length - 1) {
         final marker = m.color == PlayerColor.black
@@ -548,7 +554,9 @@ class _BoardPainter extends CustomPainter {
     // 选中 ghost（两步落子第一步）
     if (selected != null) {
       final center = Offset(
-          margin + selected!.$2 * cell, margin + selected!.$1 * cell);
+        margin + selected!.$2 * cell,
+        margin + selected!.$1 * cell,
+      );
       canvas.drawCircle(
         center,
         cell * 0.44,
@@ -563,22 +571,33 @@ class _BoardPainter extends CustomPainter {
           ..color = GoColors.woodDark.withValues(alpha: 0.9),
       );
       canvas.drawCircle(
-          center, cell * 0.12, Paint()..color = GoColors.woodDark);
+        center,
+        cell * 0.12,
+        Paint()..color = GoColors.woodDark,
+      );
     }
 
     // 坐标
     final style = const TextStyle(
-        color: GoColors.woodDark, fontSize: 10, fontWeight: FontWeight.w600);
+      color: GoColors.woodDark,
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+    );
     for (var i = 0; i < n; i++) {
       final num = TextPainter(
         text: TextSpan(text: '${i + 1}', style: style),
         textDirection: TextDirection.ltr,
       )..layout();
       num.paint(
-          canvas, Offset(margin * 0.35, margin + i * cell - num.height / 2));
+        canvas,
+        Offset(margin * 0.35, margin + i * cell - num.height / 2),
+      );
 
       final letter = TextPainter(
-        text: TextSpan(text: GoBoard.letters[i], style: style.copyWith(fontSize: 9)),
+        text: TextSpan(
+          text: GoBoard.letters[i],
+          style: style.copyWith(fontSize: 9),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       letter.paint(

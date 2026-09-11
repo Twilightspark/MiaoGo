@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/study/problem_engine.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/study/problem_category_page.dart';
 
 /// 死活题首页：三栏难度，点击进入对应难度的题目列表。
@@ -17,35 +18,42 @@ class ProblemListPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('死活题')),
       body: SafeArea(
-        child: library.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorPlaceholder(message: '$e'),
-          data: (lib) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final difficulty in ProblemDifficulty.values) ...[
-                  if (difficulty != ProblemDifficulty.values.first)
-                    const SizedBox(width: 12),
-                  Expanded(
-                    child: _DifficultyColumn(
-                      difficulty: difficulty,
-                      solved: lib
-                          .byDifficulty(difficulty)
-                          .where((p) => progress[p.id]?.solved ?? false)
-                          .length,
-                      total: lib.byDifficulty(difficulty).length,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ProblemCategoryPage(difficulty: difficulty),
+        child: CenteredContent(
+          maxWidth: 720,
+          alignment: Alignment.center,
+          child: library.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => _ErrorPlaceholder(message: '$e'),
+            data: (lib) => Padding(
+              padding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 460),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final difficulty in ProblemDifficulty.values) ...[
+                      if (difficulty != ProblemDifficulty.values.first)
+                        const SizedBox(width: 12),
+                      Expanded(
+                        child: _DifficultyColumn(
+                          difficulty: difficulty,
+                          solved: lib
+                              .byDifficulty(difficulty)
+                              .where((p) => progress[p.id]?.solved ?? false)
+                              .length,
+                          total: lib.byDifficulty(difficulty).length,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  ProblemCategoryPage(difficulty: difficulty),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ],
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -106,8 +114,9 @@ class _DifficultyColumn extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 '共 $total 题',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: GoColors.textSecondary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: GoColors.textSecondary,
+                ),
               ),
               const Spacer(),
               Text(
@@ -119,8 +128,9 @@ class _DifficultyColumn extends StatelessWidget {
               ),
               Text(
                 '已解',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: GoColors.textSecondary),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: GoColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 12),
               ClipRRect(

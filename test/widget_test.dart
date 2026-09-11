@@ -176,6 +176,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home_daily_start')));
     await tester.pumpAndSettle();
     expect(find.text('每日打卡'), findsOneWidget);
+    expect(find.byKey(const ValueKey('daily_calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('daily_another')), findsOneWidget);
     expect(find.text('今日做题进度'), findsOneWidget);
     expect(find.text('0 / 5'), findsOneWidget);
     // 提示卡：执子方与总步数。
@@ -288,33 +290,47 @@ void main() {
     expect(_redoEnabled(tester), isFalse);
   });
 
-  testWidgets('每日打卡：全部做完弹打卡完成，回首页变继续并可抽新题', (tester) async {
+  testWidgets('每日打卡：首次全部做完弹打卡成功，确定后留在本页并可再来一组', (tester) async {
     await pumpApp(tester);
     await tester.tap(find.byKey(const ValueKey('home_daily_start')));
     await tester.pumpAndSettle();
 
     await _wrongAllFive(tester);
-    expect(find.text('今日打卡完成'), findsOneWidget);
+    expect(find.text('打卡成功'), findsOneWidget);
 
-    await tester.tap(find.text('退出'));
-    await tester.pumpAndSettle();
-
-    // 回首页：按钮变「继续」。
-    expect(find.text('每日一题'), findsOneWidget);
-    expect(find.text('继续'), findsOneWidget);
-
-    // 继续 → 重新抽 5 题（新一轮从 0/5 开始）。
-    await tester.tap(find.byKey(const ValueKey('home_daily_start')));
+    // 点「确定」后仍留在每日打卡页（未退出）。
+    await tester.tap(find.byKey(const ValueKey('daily_checkin_ok')));
     await tester.pumpAndSettle();
     expect(find.text('每日打卡'), findsOneWidget);
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    // 再来一组：重新抽 5 题，进度归零。
+    await tester.tap(find.byKey(const ValueKey('daily_another')));
+    await tester.pumpAndSettle();
     expect(find.text('0 / 5'), findsOneWidget);
 
-    // 完成补充一轮 → 「补充功课完成」。
-    await _wrongAllFive(tester);
-    expect(find.text('补充功课完成'), findsOneWidget);
+    // 回首页：卡片显示「今日已打卡」。
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('今日已打卡，可再来一组'), findsOneWidget);
   });
 
-  testWidgets('每日打卡：未做完返回再进入恢复进度', (tester) async {
+  testWidgets('每日打卡：打卡日历弹窗展示累计打卡', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.byKey(const ValueKey('home_daily_start')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('daily_calendar')));
+    await tester.pumpAndSettle();
+    expect(find.text('打卡日历'), findsOneWidget);
+    expect(find.text('累计打卡 0 天'), findsOneWidget);
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('打卡日历'), findsNothing);
+  });
+
+  testWidgets('每日打卡：退出再进入重置本轮状态', (tester) async {
     await pumpApp(tester);
     await tester.tap(find.byKey(const ValueKey('home_daily_start')));
     await tester.pumpAndSettle();
@@ -330,9 +346,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home_daily_start')));
     await tester.pumpAndSettle();
 
-    // 恢复到上次状态：题 1 仍判错，进度 1/5。
-    expect(_dotColor(tester, '1'), red);
-    expect(find.text('1 / 5'), findsOneWidget);
+    // 重置：题 1 无底色，进度 0/5。
+    expect(_dotColor(tester, '1'), Colors.transparent);
+    expect(find.text('0 / 5'), findsOneWidget);
   });
 
   testWidgets('设置页点击头像弹出头像修改框', (tester) async {

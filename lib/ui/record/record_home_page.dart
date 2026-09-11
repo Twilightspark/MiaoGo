@@ -4,6 +4,7 @@ import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/sgf.dart';
 import 'package:miaogo/storage/record_store.dart';
 import 'package:miaogo/ui/common/app_icon.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/record/review_page.dart';
 import 'package:miaogo/ui/record/sgf_import.dart';
 
@@ -21,26 +22,27 @@ class RecordHomePage extends ConsumerStatefulWidget {
 class _RecordHomePageState extends ConsumerState<RecordHomePage> {
   /// 读取棋谱 SGF 并进入回看。
   Future<void> _openRecord(GameRecord record) async {
-    final content =
-        await ref.read(recordStoreProvider.notifier).sgfContentOf(record);
+    final content = await ref
+        .read(recordStoreProvider.notifier)
+        .sgfContentOf(record);
     if (!mounted) return;
     if (content == null || content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该棋谱文件缺失，无法回看')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该棋谱文件缺失，无法回看')));
       return;
     }
     try {
       final game = Sgf.parse(content);
       if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ReviewPage(game: game),
-      ));
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => ReviewPage(game: game)));
     } on FormatException {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('棋谱解析失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('棋谱解析失败')));
       }
     }
   }
@@ -88,27 +90,32 @@ class _RecordHomePageState extends ConsumerState<RecordHomePage> {
           ),
         ],
       ),
-      body: library.isEmpty
-          ? const _EmptyPlaceholder(text: '暂无棋谱，观赛后保存或点右上角导入')
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: library.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, i) => _RecordCard(
-                record: library[i],
-                onTap: _openRecord,
+      body: CenteredContent(
+        maxWidth: 720,
+        child: library.isEmpty
+            ? const _EmptyPlaceholder(text: '暂无棋谱，观赛后保存或点右上角导入')
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: library.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, i) =>
+                    _RecordCard(record: library[i], onTap: _openRecord),
               ),
-            ),
+      ),
     );
   }
 
   /// 仅取「观赛保存」与「导入」棋谱，按日期倒序。
   static List<GameRecord> _libraryOf(List<GameRecord> all) {
-    final list = all
-        .where((r) =>
-            r.source == GameSource.watch || r.source == GameSource.imported)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final list =
+        all
+            .where(
+              (r) =>
+                  r.source == GameSource.watch ||
+                  r.source == GameSource.imported,
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
     return list;
   }
 }
@@ -141,8 +148,7 @@ class _RecordCard extends StatelessWidget {
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: AppIconTile(
           asset: isWatch ? AppIcon.watch : AppIcon.record,
           color: isWatch ? GoColors.pine : GoColors.wood,
@@ -151,8 +157,9 @@ class _RecordCard extends StatelessWidget {
         ),
         title: Text(
           title,
-          style:
-              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -182,11 +189,11 @@ class _RecordCard extends StatelessWidget {
 
   /// 观赛 / 导入棋谱按棋盘视角呈现胜负（黑方胜 → 黑胜）。
   static String _resultLabel(GameResult r) => switch (r) {
-        GameResult.win => '黑胜',
-        GameResult.loss => '白胜',
-        GameResult.draw => '和棋',
-        GameResult.abandoned => '未下完',
-      };
+    GameResult.win => '黑胜',
+    GameResult.loss => '白胜',
+    GameResult.draw => '和棋',
+    GameResult.abandoned => '未下完',
+  };
 }
 
 class _EmptyPlaceholder extends StatelessWidget {

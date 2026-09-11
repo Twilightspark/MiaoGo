@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/storage/problem_store.dart';
 import 'package:miaogo/study/problem_engine.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/study/problem_solve_page.dart';
 
 /// 题目数据类别：已做（做对）/ 错题（用满机会判错）/ 未做。
@@ -46,9 +47,12 @@ class _ProblemCategoryPageState extends ConsumerState<ProblemCategoryPage> {
   }
 
   void _open(List<Problem> problems, int index) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ProblemSolvePage(problems: problems, initialIndex: index),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ProblemSolvePage(problems: problems, initialIndex: index),
+      ),
+    );
   }
 
   @override
@@ -59,54 +63,58 @@ class _ProblemCategoryPageState extends ConsumerState<ProblemCategoryPage> {
     return Scaffold(
       appBar: AppBar(title: Text('${widget.difficulty.label}死活题')),
       body: SafeArea(
-        child: library.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('题库加载失败：$e')),
-          data: (lib) {
-            final all = lib.byDifficulty(widget.difficulty);
-            final filtered =
-                all.where((p) => _matches(_filter, progress[p.id])).toList();
-            final counts = {
-              for (final f in ProblemFilter.values)
-                f: all.where((p) => _matches(f, progress[p.id])).length,
-            };
+        child: CenteredContent(
+          maxWidth: 720,
+          child: library.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('题库加载失败：$e')),
+            data: (lib) {
+              final all = lib.byDifficulty(widget.difficulty);
+              final filtered = all
+                  .where((p) => _matches(_filter, progress[p.id]))
+                  .toList();
+              final counts = {
+                for (final f in ProblemFilter.values)
+                  f: all.where((p) => _matches(f, progress[p.id])).length,
+              };
 
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: SegmentedButton<ProblemFilter>(
-                    segments: [
-                      for (final f in ProblemFilter.values)
-                        ButtonSegment(
-                          value: f,
-                          label: Text('${f.label} ${counts[f]}'),
-                        ),
-                    ],
-                    selected: {_filter},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (s) =>
-                        setState(() => _filter = s.first),
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: SegmentedButton<ProblemFilter>(
+                      segments: [
+                        for (final f in ProblemFilter.values)
+                          ButtonSegment(
+                            value: f,
+                            label: Text('${f.label} ${counts[f]}'),
+                          ),
+                      ],
+                      selected: {_filter},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) =>
+                          setState(() => _filter = s.first),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: filtered.isEmpty
-                      ? _EmptyPlaceholder(label: _filter.label)
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, i) {
-                            final problem = filtered[i];
-                            return _ProblemTile(
-                              problem: problem,
-                              onTap: () => _open(filtered, i),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            );
-          },
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? _EmptyPlaceholder(label: _filter.label)
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, i) {
+                              final problem = filtered[i];
+                              return _ProblemTile(
+                                problem: problem,
+                                onTap: () => _open(filtered, i),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -157,8 +165,9 @@ class _EmptyPlaceholder extends StatelessWidget {
     return Center(
       child: Text(
         '暂无「$label」的题目',
-        style: theme.textTheme.bodyMedium
-            ?.copyWith(color: GoColors.textSecondary),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: GoColors.textSecondary,
+        ),
       ),
     );
   }

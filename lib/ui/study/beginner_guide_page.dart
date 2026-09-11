@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/study/beginner_guide.dart';
 import 'package:miaogo/ui/board_widget.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 
 /// 基础规则新手指引：引导式 12 步入门学习页。
 ///
@@ -78,9 +79,11 @@ class _BeginnerGuidePageState extends State<BeginnerGuidePage> {
             Text('恭喜入门！'),
           ],
         ),
-        content: const Text('你已完成《基础规则新手指引》，掌握了棋盘、气与提子、'
-            '禁着点、连接分断、做眼、打劫、胜负判定与停一手等入门规则。'
-            '现在去下一盘棋试试吧！'),
+        content: const Text(
+          '你已完成《基础规则新手指引》，掌握了棋盘、气与提子、'
+          '禁着点、连接分断、做眼、打劫、胜负判定与停一手等入门规则。'
+          '现在去下一盘棋试试吧！',
+        ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           FilledButton.icon(
@@ -113,58 +116,54 @@ class _BeginnerGuidePageState extends State<BeginnerGuidePage> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-          child: Column(
-            children: [
-              _StepHeader(
-                engine: e,
-                stepLabel: '第 ${idx + 1} / $total 步',
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    child: GoBoardWidget(
-                      board: e.board,
-                      lastMove: e.lastMove,
-                      marks: [
-                        for (final m in e.marks) _toBoardMark(m),
-                      ],
-                      enabled: e.canPlay,
-                      onPointTapped: e.canPlay ? _handleTap : null,
+          child: AdaptiveBoardLayout(
+            board: GoBoardWidget(
+              board: e.board,
+              lastMove: e.lastMove,
+              marks: [for (final m in e.marks) _toBoardMark(m)],
+              enabled: e.canPlay,
+              onPointTapped: e.canPlay ? _handleTap : null,
+            ),
+            top: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _StepHeader(engine: e, stepLabel: '第 ${idx + 1} / $total 步'),
+                const SizedBox(height: 8),
+              ],
+            ),
+            bottom: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                if (e.feedback != null)
+                  _FeedbackBar(
+                    text: e.feedback!.message,
+                    good: e.feedback!.good,
+                  ),
+                if (e.showPass) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const ValueKey('guide_pass'),
+                      onPressed: e.canNext ? null : _pass,
+                      icon: const Icon(Icons.skip_next_outlined, size: 18),
+                      label: const Text('停一手'),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (e.feedback != null)
-                _FeedbackBar(
-                  text: e.feedback!.message,
-                  good: e.feedback!.good,
-                ),
-              if (e.showPass) ...[
+                ],
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    key: const ValueKey('guide_pass'),
-                    onPressed: e.canNext ? null : _pass,
-                    icon: const Icon(Icons.skip_next_outlined, size: 18),
-                    label: const Text('停一手'),
-                  ),
+                _ActionBar(
+                  canPrev: e.canPrev,
+                  canRetry: e.canRetry,
+                  canNext: e.canNext,
+                  isLast: e.isLastStep,
+                  onPrev: _gotoPrev,
+                  onRetry: _retry,
+                  onNext: _gotoNext,
                 ),
               ],
-              const SizedBox(height: 8),
-              _ActionBar(
-                canPrev: e.canPrev,
-                canRetry: e.canRetry,
-                canNext: e.canNext,
-                isLast: e.isLastStep,
-                onPrev: _gotoPrev,
-                onRetry: _retry,
-                onNext: _gotoNext,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -220,16 +219,18 @@ class _StepHeader extends StatelessWidget {
                 if (engine.completed)
                   const _DoneChip()
                 else
-                  const Icon(Icons.school_outlined,
-                      size: 16, color: GoColors.textSecondary),
+                  const Icon(
+                    Icons.school_outlined,
+                    size: 16,
+                    color: GoColors.textSecondary,
+                  ),
               ],
             ),
             const SizedBox(height: 2),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: (engine.index + 1) /
-                    BeginnerGuideEngine.totalSteps,
+                value: (engine.index + 1) / BeginnerGuideEngine.totalSteps,
                 minHeight: 4,
                 backgroundColor: theme.colorScheme.outlineVariant,
               ),
@@ -374,8 +375,10 @@ class _ActionBar extends StatelessWidget {
           child: FilledButton.icon(
             key: const ValueKey('guide_next'),
             onPressed: canNext ? onNext : null,
-            icon: Icon(isLast ? Icons.flag_outlined : Icons.chevron_right,
-                size: 18),
+            icon: Icon(
+              isLast ? Icons.flag_outlined : Icons.chevron_right,
+              size: 18,
+            ),
             label: Text(isLast ? '完成' : '下一步'),
           ),
         ),

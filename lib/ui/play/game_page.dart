@@ -18,6 +18,7 @@ import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
 import 'package:miaogo/ui/analysis_overlay.dart';
 import 'package:miaogo/ui/board_widget.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/common/winrate_panel.dart';
 import 'package:miaogo/ui/score_sheet.dart';
 
@@ -42,16 +43,16 @@ class GamePage extends ConsumerStatefulWidget {
 
   /// 从「保存对局」快照续弈（参数均取自快照）。
   GamePage.resume({super.key, required PendingGame pending})
-      : _resumeFrom = pending,
-        size = pending.size,
-        rule = pending.rule,
-        komi = pending.komi,
-        humanColor = pending.humanColor,
-        difficulty = pending.difficulty,
-        opponentName = pending.opponentName,
-        source = pending.source,
-        tournamentId = pending.tournamentId,
-        moveStyle = pending.moveStyle;
+    : _resumeFrom = pending,
+      size = pending.size,
+      rule = pending.rule,
+      komi = pending.komi,
+      humanColor = pending.humanColor,
+      difficulty = pending.difficulty,
+      opponentName = pending.opponentName,
+      source = pending.source,
+      tournamentId = pending.tournamentId,
+      moveStyle = pending.moveStyle;
 
   final int size;
   final GoRule rule;
@@ -119,8 +120,7 @@ class _GamePageState extends ConsumerState<GamePage> {
   @override
   void initState() {
     super.initState();
-    _moveStyle =
-        widget.moveStyle ?? ref.read(settingsProvider).moveStyle;
+    _moveStyle = widget.moveStyle ?? ref.read(settingsProvider).moveStyle;
     _aiName = widget.opponentName ?? CareerNames.aiPlayerName(Random());
     final pending = widget._resumeFrom;
     if (pending != null) {
@@ -141,6 +141,7 @@ class _GamePageState extends ConsumerState<GamePage> {
     _stopAnalysis();
     super.dispose();
   }
+
   void _startGame() {
     final resume = widget._resumeFrom;
     final notifier = ref.read(gameControllerProvider.notifier);
@@ -195,8 +196,9 @@ class _GamePageState extends ConsumerState<GamePage> {
   void _placeSelected() {
     final sel = _selected;
     if (sel == null) return;
-    final ok =
-        ref.read(gameControllerProvider.notifier).placeStone(sel.$1, sel.$2);
+    final ok = ref
+        .read(gameControllerProvider.notifier)
+        .placeStone(sel.$1, sel.$2);
     if (ok) {
       setState(() {
         _selected = null;
@@ -212,15 +214,14 @@ class _GamePageState extends ConsumerState<GamePage> {
     ref.read(gameControllerProvider.notifier).scoreAndFinish();
   }
 
-  bool get _engineReady =>
-      ref.read(engineStatusProvider) == EngineStatus.ready;
+  bool get _engineReady => ref.read(engineStatusProvider) == EngineStatus.ready;
 
   /// 本局 AI 所用引擎控制器（单引擎，对弈与分析共用）。
   EngineController get _gameEngineController =>
       ref.read(engineStatusProvider.notifier);
 
-  NotifierProvider<EngineController, EngineStatus> get _gameEngineStatusProvider =>
-      engineStatusProvider;
+  NotifierProvider<EngineController, EngineStatus>
+  get _gameEngineStatusProvider => engineStatusProvider;
 
   /// 实时分析开关（引擎必须就绪；未就绪由按钮禁用拦截）。
   void _toggleAnalysis() {
@@ -295,7 +296,9 @@ class _GamePageState extends ConsumerState<GamePage> {
 
   /// 把当前推荐点转成棋盘编号标注（跳过已失效/被占点）。
   List<BoardSuggestionMark> _suggestionMarks(
-      GoBoard board, PlayerColor toMove) {
+    GoBoard board,
+    PlayerColor toMove,
+  ) {
     final out = <BoardSuggestionMark>[];
     for (final a in _suggestions) {
       if (a.move == 'pass') continue;
@@ -303,12 +306,14 @@ class _GamePageState extends ConsumerState<GamePage> {
       if (v == null) continue;
       final (r, c) = v;
       if (!board.inBounds(r, c) || !board.isLegal(toMove, r, c)) continue;
-      out.add(BoardSuggestionMark(
-        row: r,
-        col: c,
-        number: out.length + 1,
-        isBest: out.isEmpty,
-      ));
+      out.add(
+        BoardSuggestionMark(
+          row: r,
+          col: c,
+          number: out.length + 1,
+          isBest: out.isEmpty,
+        ),
+      );
     }
     return out;
   }
@@ -343,8 +348,7 @@ class _GamePageState extends ConsumerState<GamePage> {
   }
 
   void _recordBlackWinrate(int hand, double winrate, PlayerColor sideToMove) {
-    _blackWinrateByHand[hand] =
-        blackPerspectiveWinrate(winrate, sideToMove);
+    _blackWinrateByHand[hand] = blackPerspectiveWinrate(winrate, sideToMove);
     if (mounted) setState(() {});
   }
 
@@ -517,139 +521,136 @@ class _GamePageState extends ConsumerState<GamePage> {
         if (!didPop) _handleBack();
       },
       child: Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            key: const ValueKey('game_influence'),
-            tooltip: '实时分析',
-            icon: Icon(
-              Icons.radar,
-              color: _analysisEnabled ? GoColors.pine : null,
-            ),
-            onPressed: _engineReady
-                ? () {
-                    _selected = null;
-                    _toggleAnalysis();
-                  }
-                : null,
-          ),
-          IconButton(
-            key: const ValueKey('game_winrate'),
-            tooltip: '胜率曲线',
-            icon: Icon(
-              Icons.show_chart,
-              color: _curveVisible ? GoColors.pine : null,
-            ),
-            onPressed: _engineReady ? _toggleCurve : null,
-          ),
-          IconButton(
-            key: const ValueKey('game_save'),
-            tooltip: '保存对局',
-            icon: const Icon(Icons.save_outlined),
-            onPressed: canSave ? _saveGame : null,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            children: [
-              const EngineStatusBanner(),
-              _StatusBar(
-                game: game,
-                humanName: humanName,
-                aiName: _aiName,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              key: const ValueKey('game_influence'),
+              tooltip: '实时分析',
+              icon: Icon(
+                Icons.radar,
+                color: _analysisEnabled ? GoColors.pine : null,
               ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: GoBoardWidget(
-                        board: game.board,
-                        lastMove:
-                            game.moves.isNotEmpty ? game.moves.last : null,
-                        suggestions: _suggestions.isEmpty
-                            ? null
-                            : _suggestionMarks(game.board, game.turn),
-                        enabled: game.isHumanTurn,
-                        selected: _selected,
-                        selectedColor: game.humanColor,
-                        influence: influence,
-                        onPointTapped: _onPointTapped,
-                        onPointDrag: _onPointDrag,
+              onPressed: _engineReady
+                  ? () {
+                      _selected = null;
+                      _toggleAnalysis();
+                    }
+                  : null,
+            ),
+            IconButton(
+              key: const ValueKey('game_winrate'),
+              tooltip: '胜率曲线',
+              icon: Icon(
+                Icons.show_chart,
+                color: _curveVisible ? GoColors.pine : null,
+              ),
+              onPressed: _engineReady ? _toggleCurve : null,
+            ),
+            IconButton(
+              key: const ValueKey('game_save'),
+              tooltip: '保存对局',
+              icon: const Icon(Icons.save_outlined),
+              onPressed: canSave ? _saveGame : null,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: AdaptiveBoardLayout(
+              board: GoBoardWidget(
+                board: game.board,
+                lastMove: game.moves.isNotEmpty ? game.moves.last : null,
+                suggestions: _suggestions.isEmpty
+                    ? null
+                    : _suggestionMarks(game.board, game.turn),
+                enabled: game.isHumanTurn,
+                selected: _selected,
+                selectedColor: game.humanColor,
+                influence: influence,
+                onPointTapped: _onPointTapped,
+                onPointDrag: _onPointDrag,
+              ),
+              top: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const EngineStatusBanner(),
+                  _StatusBar(game: game, humanName: humanName, aiName: _aiName),
+                  const SizedBox(height: 8),
+                ],
+              ),
+              bottom: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_curveVisible) ...[
+                    const SizedBox(height: 8),
+                    WinratePanel(
+                      points: ([
+                        for (final e in _blackWinrateByHand.entries)
+                          (e.key, e.value),
+                      ]..sort((a, b) => a.$1.compareTo(b.$1))),
+                      currentHand: game.moves.length,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (_analysisEnabled)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            key: const ValueKey('game_analysis_cancel'),
+                            onPressed: _cancelAnalysis,
+                            child: const Text('取消'),
+                          ),
+                        ],
                       ),
                     ),
+                  if (_moveStyle == MoveStyle.confirm) ...[
+                    const SizedBox(height: 8),
+                    _SelectionBar(
+                      selected: _selected,
+                      isLegal:
+                          _selected != null &&
+                          game.board.isLegal(
+                            game.humanColor,
+                            _selected!.$1,
+                            _selected!.$2,
+                          ),
+                      onCancel: () => setState(() => _selected = null),
+                      onPlace: _placeSelected,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  _ControlBar(
+                    game: game,
+                    onUndo: () {
+                      _closeInfluence();
+                      setState(() => _selected = null);
+                      ref.read(gameControllerProvider.notifier).undo();
+                    },
+                    onPass: () {
+                      _closeInfluence();
+                      setState(() => _selected = null);
+                      ref.read(gameControllerProvider.notifier).pass();
+                    },
+                    onResign: () {
+                      _closeInfluence();
+                      setState(() => _selected = null);
+                      _confirmResign();
+                    },
+                    onScore: () {
+                      _closeInfluence();
+                      _scoreNow();
+                    },
                   ),
-                ),
+                ],
               ),
-              if (_curveVisible) ...[
-                const SizedBox(height: 8),
-                WinratePanel(
-                  points: ([
-                    for (final e in _blackWinrateByHand.entries)
-                      (e.key, e.value),
-                  ]..sort((a, b) => a.$1.compareTo(b.$1))),
-                  currentHand: game.moves.length,
-                ),
-              ],
-              const SizedBox(height: 8),
-              if (_analysisEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton(
-                        key: const ValueKey('game_analysis_cancel'),
-                        onPressed: _cancelAnalysis,
-                        child: const Text('取消'),
-                      ),
-                    ],
-                  ),
-                ),
-              if (_moveStyle == MoveStyle.confirm) ...[
-                const SizedBox(height: 8),
-                _SelectionBar(
-                  selected: _selected,
-                  isLegal: _selected != null &&
-                      game.board.isLegal(game.humanColor, _selected!.$1,
-                          _selected!.$2),
-                  onCancel: () => setState(() => _selected = null),
-                  onPlace: _placeSelected,
-                ),
-              ],
-              const SizedBox(height: 8),
-              _ControlBar(
-                game: game,
-                onUndo: () {
-                  _closeInfluence();
-                  setState(() => _selected = null);
-                  ref.read(gameControllerProvider.notifier).undo();
-                },
-                onPass: () {
-                  _closeInfluence();
-                  setState(() => _selected = null);
-                  ref.read(gameControllerProvider.notifier).pass();
-                },
-                onResign: () {
-                  _closeInfluence();
-                  setState(() => _selected = null);
-                  _confirmResign();
-                },
-                onScore: () {
-                  _closeInfluence();
-                  _scoreNow();
-                },
-              ),
-            ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -738,10 +739,12 @@ class _GamePageState extends ConsumerState<GamePage> {
     } else {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          content: Text('再按一次返回可放弃本局并回到首页'),
-          duration: Duration(milliseconds: 1200),
-        ));
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('再按一次返回可放弃本局并回到首页'),
+            duration: Duration(milliseconds: 1200),
+          ),
+        );
     }
   }
 
@@ -807,9 +810,7 @@ class _GamePageState extends ConsumerState<GamePage> {
         .saveAndInterrupt(winrateHistory: history);
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('对局已保存，可从首页继续本局')),
-    );
+    messenger.showSnackBar(const SnackBar(content: Text('对局已保存，可从首页继续本局')));
   }
 }
 
@@ -850,14 +851,16 @@ class _StatusBar extends StatelessWidget {
               children: [
                 Text(
                   game.finished ? '对局结束' : '轮到 ${game.turn.label}方',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: GoColors.pine),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: GoColors.pine,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '第 ${game.moves.length} 手',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: GoColors.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: GoColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -896,15 +899,17 @@ class _PlayerInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
-      mainAxisAlignment:
-          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: alignEnd
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       children: [
         if (!alignEnd) _stone(color),
         if (!alignEnd) const SizedBox(width: 8),
         Flexible(
           child: Column(
-            crossAxisAlignment:
-                alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: alignEnd
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -920,8 +925,7 @@ class _PlayerInfo extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color:
-                            isTurn ? GoColors.pine : GoColors.textPrimary,
+                        color: isTurn ? GoColors.pine : GoColors.textPrimary,
                       ),
                     ),
                   ),
@@ -933,8 +937,9 @@ class _PlayerInfo extends StatelessWidget {
               ),
               Text(
                 '提 $captured',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: GoColors.textSecondary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: GoColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -1031,8 +1036,7 @@ class _SelectionBar extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onPlace;
 
-  String _coord((int, int) p) =>
-      '${GoBoard.letters[p.$2]}${p.$1 + 1}';
+  String _coord((int, int) p) => '${GoBoard.letters[p.$2]}${p.$1 + 1}';
 
   @override
   Widget build(BuildContext context) {
@@ -1043,9 +1047,9 @@ class _SelectionBar extends StatelessWidget {
       children: [
         Text(
           _coord(sel),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: GoColors.textSecondary,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: GoColors.textSecondary),
         ),
         const SizedBox(width: 12),
         OutlinedButton(
@@ -1154,9 +1158,7 @@ class _CtrlButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         side: BorderSide(
-          color: enabled
-              ? GoColors.pine
-              : theme.colorScheme.outlineVariant,
+          color: enabled ? GoColors.pine : theme.colorScheme.outlineVariant,
         ),
         foregroundColor: enabled ? GoColors.pine : theme.colorScheme.outline,
       ),

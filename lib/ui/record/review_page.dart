@@ -14,6 +14,7 @@ import 'package:miaogo/game/review_controller.dart';
 import 'package:miaogo/game/review_winrate.dart';
 import 'package:miaogo/ui/analysis_overlay.dart';
 import 'package:miaogo/ui/board_widget.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/common/winrate_panel.dart';
 
 /// 历史对弈回看/复盘页：逐步回放棋谱，支持试下续弈与逐手胜率曲线。
@@ -147,10 +148,12 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
     ref.read(reviewControllerProvider.notifier).enterTry();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('已进入试下：可手动黑白交替落子（停手=PASS）'),
-        duration: Duration(milliseconds: 1600),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('已进入试下：可手动黑白交替落子（停手=PASS）'),
+          duration: Duration(milliseconds: 1600),
+        ),
+      );
   }
 
   void _exitTry() {
@@ -255,7 +258,10 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
   }
 
   ReviewWinrateEval _curveEvalFor(
-      KataGoEngine engine, GoRule rule, double komi) {
+    KataGoEngine engine,
+    GoRule rule,
+    double komi,
+  ) {
     return (board, toMove) async {
       final result = await engine.searchAnalysis(
         board: board,
@@ -298,13 +304,16 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
     final epoch = _curveEpoch;
     _curveBusy = true;
     setState(() => _curveFailed = false);
-    final ok = await task.runTo(target, onProgress: (done, total) {
-      if (!mounted || epoch != _curveEpoch) return;
-      setState(() {
-        _curveProgress = done;
-        _curveTotal = total;
-      });
-    });
+    final ok = await task.runTo(
+      target,
+      onProgress: (done, total) {
+        if (!mounted || epoch != _curveEpoch) return;
+        setState(() {
+          _curveProgress = done;
+          _curveTotal = total;
+        });
+      },
+    );
     if (!mounted || epoch != _curveEpoch) {
       _curveBusy = false;
       return;
@@ -342,10 +351,12 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
     }
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('再按一次返回退出回看'),
-        duration: Duration(milliseconds: 1200),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('再按一次返回退出回看'),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
   }
 
   /// 「退出」/双击返回：直接回到首页。
@@ -394,78 +405,75 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
             : SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                  child: Column(
-                    children: [
-                      const EngineStatusBanner(),
-                      _GameInfoCard(state: s),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 480),
-                            child: AspectRatio(
-                              aspectRatio: 1,
-                              child: GoBoardWidget(
-                                board: s.board,
-                                lastMove:
-                                    s.moves.isNotEmpty ? s.moves.last : null,
-                                hint: _suggestionHint,
-                                influence: _analysisEnabled
-                                    ? _engineInfluence
-                                    : null,
-                                enabled: s.inTry && !s.tryEnded,
-                                onPointTapped: s.inTry
-                                    ? _onTryPointTapped
-                                    : null,
-                              ),
-                            ),
+                  child: AdaptiveBoardLayout(
+                    board: GoBoardWidget(
+                      board: s.board,
+                      lastMove: s.moves.isNotEmpty ? s.moves.last : null,
+                      hint: _suggestionHint,
+                      influence: _analysisEnabled ? _engineInfluence : null,
+                      enabled: s.inTry && !s.tryEnded,
+                      onPointTapped: s.inTry ? _onTryPointTapped : null,
+                    ),
+                    top: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const EngineStatusBanner(),
+                        _GameInfoCard(state: s),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                    bottom: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 8),
+                        if (s.inTry)
+                          _TryStatusBar(state: s)
+                        else
+                          _NavBar(state: s, onJump: _jump),
+                        const SizedBox(height: 8),
+                        if (_curveVisible) ...[
+                          _curvePanel(s),
+                          const SizedBox(height: 8),
+                        ],
+                        if (_analysisEnabled || _suggestion != null)
+                          SuggestionPanel(
+                            boardSize: s.boardSize,
+                            suggestion: _suggestion,
+                            onDismiss: () => setState(() {
+                              _suggestion = null;
+                              _suggestionHint = null;
+                            }),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (s.inTry)
-                        _TryStatusBar(state: s)
-                      else
-                        _NavBar(state: s, onJump: _jump),
-                      const SizedBox(height: 8),
-                      if (_curveVisible) ...[
-                        _curvePanel(s),
+                        if (s.comment != null) ...[
+                          const SizedBox(height: 8),
+                          _CommentPanel(comment: s.comment!),
+                        ],
                         const SizedBox(height: 8),
-                      ],
-                      if (_analysisEnabled || _suggestion != null)
-                        SuggestionPanel(
-                          boardSize: s.boardSize,
-                          suggestion: _suggestion,
-                          onDismiss: () => setState(() {
-                            _suggestion = null;
-                            _suggestionHint = null;
-                          }),
-                        ),
-                      if (s.comment != null) ...[
+                        if (s.inTry)
+                          _TryBar(
+                            state: s,
+                            onUndo: _undoTry,
+                            onPass: _passTry,
+                            onScore: _scoreNow,
+                            onBack: _exitTry,
+                          )
+                        else
+                          _NavActionBar(
+                            atStart: s.atStart,
+                            atEnd: s.atEnd,
+                            onFirst: () => _jump(0),
+                            onPrev: () => _jump(s.index - 1),
+                            onNext: () => _jump(s.index + 1),
+                            onLast: () => _jump(s.mainline.length - 1),
+                          ),
                         const SizedBox(height: 8),
-                        _CommentPanel(comment: s.comment!),
-                      ],
-                      const SizedBox(height: 8),
-                      if (s.inTry)
-                        _TryBar(
-                          state: s,
-                          onUndo: _undoTry,
-                          onPass: _passTry,
-                          onScore: _scoreNow,
-                          onBack: _exitTry,
-                        )
-                      else
-                        _NavActionBar(
-                          atStart: s.atStart,
-                          atEnd: s.atEnd,
-                          onFirst: () => _jump(0),
-                          onPrev: () => _jump(s.index - 1),
-                          onNext: () => _jump(s.index + 1),
-                          onLast: () => _jump(s.mainline.length - 1),
+                        _ModeBar(
+                          inTry: s.inTry,
+                          onTry: _enterTry,
+                          onExit: _exitToHome,
                         ),
-                      const SizedBox(height: 8),
-                      _ModeBar(inTry: s.inTry, onTry: _enterTry, onExit: _exitToHome),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -478,13 +486,12 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
       for (final e in _curveTask?.results.entries ?? <MapEntry<int, double>>[])
         (e.key, e.value),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
-    final currentHand =
-        s.moves.length - (s.inTry ? s.tryMoves.length : 0);
+    final currentHand = s.moves.length - (s.inTry ? s.tryMoves.length : 0);
     final caption = _curveFailed
         ? '胜率曲线计算中断（引擎不可用）'
         : (_curveBusy || _curveProgress < _curveTotal)
-            ? '正在计算胜率：$_curveProgress/$_curveTotal'
-            : (points.isEmpty ? '暂无胜率数据' : null);
+        ? '正在计算胜率：$_curveProgress/$_curveTotal'
+        : (points.isEmpty ? '暂无胜率数据' : null);
     return Column(
       children: [
         WinratePanel(points: points, currentHand: currentHand),
@@ -493,10 +500,9 @@ class _ReviewPageState extends ConsumerState<ReviewPage> {
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               caption,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: GoColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: GoColors.textSecondary),
             ),
           ),
       ],
@@ -566,8 +572,9 @@ class _CommentPanel extends StatelessWidget {
             Expanded(
               child: Text(
                 comment,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: GoColors.textPrimary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: GoColors.textPrimary,
+                ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -597,8 +604,9 @@ class _NavBar extends StatelessWidget {
           children: [
             Text(
               state.atStart ? '开局' : '第 ${state.index} 手',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: GoColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: GoColors.textSecondary,
+              ),
             ),
             const Spacer(),
             Text(
@@ -618,8 +626,9 @@ class _NavBar extends StatelessWidget {
         ),
         Text(
           '共 $count 手',
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: GoColors.textSecondary),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: GoColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -642,8 +651,9 @@ class _TryStatusBar extends StatelessWidget {
         children: [
           Text(
             '试下 · 第 ${state.moves.length} 手',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
           const SizedBox(width: 8),
           Text(
@@ -801,7 +811,11 @@ class _TryBar extends StatelessWidget {
 
 /// 模式操作栏：试下 / 退出。
 class _ModeBar extends StatelessWidget {
-  const _ModeBar({required this.inTry, required this.onTry, required this.onExit});
+  const _ModeBar({
+    required this.inTry,
+    required this.onTry,
+    required this.onExit,
+  });
 
   final bool inTry;
   final VoidCallback onTry;
@@ -898,8 +912,8 @@ class _ScoreResultDialog extends StatelessWidget {
     final headlineColor = result.winner == null
         ? GoColors.wood
         : (result.winner == PlayerColor.black
-            ? GoColors.pine
-            : GoColors.textSecondary);
+              ? GoColors.pine
+              : GoColors.textSecondary);
     final unit = result.method == ScoringMethod.area ? '点' : '目';
     return AlertDialog(
       title: const Text('当前局面点目'),
@@ -927,8 +941,9 @@ class _ScoreResultDialog extends StatelessWidget {
           Text(
             '黑 ${result.blackTotal} $unit · 白 ${result.whiteTotal} $unit · '
             '$ruleLabel规则 · $boardSize 路 · 已走 $moveCount 手',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: GoColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: GoColors.textSecondary,
+            ),
           ),
         ],
       ),

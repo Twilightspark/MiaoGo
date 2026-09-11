@@ -130,5 +130,53 @@ void main() {
         isEmpty,
       );
     });
+
+    test('selectDailyProblems 返回题目对象且顺序与 id 一致', () {
+      final lib = <Problem>[
+        for (var i = 0; i < 6; i++) _p('b$i', ProblemDifficulty.beginner),
+      ];
+      final problems = selectDailyProblems(
+        library: lib,
+        rankIndex: 0,
+        progress: const {},
+        now: DateTime(2026, 1, 1),
+      );
+      final ids = selectDailyProblemIds(
+        library: lib,
+        rankIndex: 0,
+        progress: const {},
+        now: DateTime(2026, 1, 1),
+      );
+      expect(problems.length, 5);
+      expect(problems.map((p) => p.id).toList(), ids);
+    });
+
+    test('再来一组：excludeIds 避开上一组已出题', () {
+      final lib = <Problem>[
+        for (var i = 0; i < 10; i++) _p('b$i', ProblemDifficulty.beginner),
+      ];
+      final first = selectDailyProblems(
+        library: lib,
+        rankIndex: 0,
+        progress: const {},
+        now: DateTime(2026, 1, 1),
+      );
+      final second = selectDailyProblems(
+        library: lib,
+        rankIndex: 0,
+        progress: const {},
+        now: DateTime(2026, 1, 1),
+        round: 2,
+        excludeIds: first.map((p) => p.id).toSet(),
+      );
+      expect(second.length, 5);
+      expect(
+        second
+            .map((p) => p.id)
+            .toSet()
+            .intersection(first.map((p) => p.id).toSet()),
+        isEmpty,
+      );
+    });
   });
 }

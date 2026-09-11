@@ -10,6 +10,7 @@ import 'package:miaogo/engine/engine_controller.dart';
 import 'package:miaogo/engine/katago_engine.dart';
 import 'package:miaogo/storage/settings_store.dart';
 import 'package:miaogo/storage/user_store.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/play/game_page.dart';
 import 'package:miaogo/ui/play/match_wait_page.dart';
 
@@ -49,21 +50,20 @@ class _AISetupPageState extends ConsumerState<AISetupPage> {
   Future<void> _start() async {
     final color = await _resolveHumanColor();
     if (color == null || !mounted) return;
-    final matched = await showMatchDialog(
-      context,
-      random: _random,
-    );
+    final matched = await showMatchDialog(context, random: _random);
     if (!mounted || matched == null) return; // 兜底：取消则留在本页。
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => GamePage(
-        size: _boardSize.size,
-        rule: _rule,
-        komi: _rule.defaultKomi,
-        humanColor: color,
-        difficulty: _difficulty,
-        moveStyle: _moveStyle,
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GamePage(
+          size: _boardSize.size,
+          rule: _rule,
+          komi: _rule.defaultKomi,
+          humanColor: color,
+          difficulty: _difficulty,
+          moveStyle: _moveStyle,
+        ),
       ),
-    ));
+    );
   }
 
   /// 按下棋顺序解析玩家执子色；猜先由 [widget.random] 或内部随机决定。
@@ -146,71 +146,72 @@ class _AISetupPageState extends ConsumerState<AISetupPage> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const _SectionLabel('对手段位'),
-          _PillChoice<int>(
-            values: [
-              for (var i = 0; i < RankSystem.kTotalRanks; i++) i,
-            ],
-            selected: _difficulty,
-            onChanged: (v) => setState(() => _difficulty = v),
-            labelOf: RankSystem.rankName,
-            chipKeyOf: (i, _) => ValueKey('rank_option_$i'),
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('棋盘尺寸'),
-          _PillChoice<BoardSize>(
-            values: BoardSize.values,
-            selected: _boardSize,
-            onChanged: (v) => setState(() => _boardSize = v),
-            labelOf: (v) => '${v.size} 路',
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('对弈规则'),
-          _PillChoice<GoRule>(
-            values: GoRule.values,
-            selected: _rule,
-            onChanged: (v) => setState(() => _rule = v),
-            labelOf: (v) => v.label,
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('下棋顺序'),
-          _PillChoice<_MoveOrder>(
-            values: _MoveOrder.values,
-            selected: _order,
-            onChanged: (v) => setState(() => _order = v),
-            labelOf: (v) => v.label,
-          ),
-          const SizedBox(height: 16),
-          const _SectionLabel('落子方式'),
-          _PillChoice<MoveStyle>(
-            values: MoveStyle.values,
-            selected: _moveStyle,
-            onChanged: (v) => setState(() => _moveStyle = v),
-            labelOf: _moveStyleLabel,
-          ),
-          const SizedBox(height: 28),
-          _buildStartArea(theme),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton(
-              key: const ValueKey('ai_back_home'),
-              onPressed: () =>
-                  Navigator.of(context).popUntil((route) => route.isFirst),
-              child: Text(
-                '返回首页',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
+      body: CenteredContent(
+        maxWidth: 600,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const _SectionLabel('对手段位'),
+            _PillChoice<int>(
+              values: [for (var i = 0; i < RankSystem.kTotalRanks; i++) i],
+              selected: _difficulty,
+              onChanged: (v) => setState(() => _difficulty = v),
+              labelOf: RankSystem.rankName,
+              chipKeyOf: (i, _) => ValueKey('rank_option_$i'),
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('棋盘尺寸'),
+            _PillChoice<BoardSize>(
+              values: BoardSize.values,
+              selected: _boardSize,
+              onChanged: (v) => setState(() => _boardSize = v),
+              labelOf: (v) => '${v.size} 路',
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('对弈规则'),
+            _PillChoice<GoRule>(
+              values: GoRule.values,
+              selected: _rule,
+              onChanged: (v) => setState(() => _rule = v),
+              labelOf: (v) => v.label,
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('下棋顺序'),
+            _PillChoice<_MoveOrder>(
+              values: _MoveOrder.values,
+              selected: _order,
+              onChanged: (v) => setState(() => _order = v),
+              labelOf: (v) => v.label,
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('落子方式'),
+            _PillChoice<MoveStyle>(
+              values: MoveStyle.values,
+              selected: _moveStyle,
+              onChanged: (v) => setState(() => _moveStyle = v),
+              labelOf: _moveStyleLabel,
+            ),
+            const SizedBox(height: 28),
+            _buildStartArea(theme),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                key: const ValueKey('ai_back_home'),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+                child: Text(
+                  '返回首页',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -305,9 +306,9 @@ enum _GuessParity {
 
 /// 落子方式在快速匹配页的短文案。
 String _moveStyleLabel(MoveStyle style) => switch (style) {
-      MoveStyle.doubleTap => '双击',
-      MoveStyle.confirm => '确认',
-    };
+  MoveStyle.doubleTap => '双击',
+  MoveStyle.confirm => '确认',
+};
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
@@ -321,8 +322,8 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -381,8 +382,7 @@ class _PillChoice<T> extends StatelessWidget {
                   child: Text(
                     labelOf(value),
                     style: TextStyle(
-                      color:
-                          isSelected ? GoColors.white : GoColors.textPrimary,
+                      color: isSelected ? GoColors.white : GoColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

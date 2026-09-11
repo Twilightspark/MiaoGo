@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:miaogo/app_theme.dart';
 import 'package:miaogo/core/rules.dart';
 import 'package:miaogo/storage/settings_store.dart';
+import 'package:miaogo/ui/common/responsive.dart';
 import 'package:miaogo/ui/settings/settings_common.dart';
 
 /// 选项页中的单个选项。
@@ -62,27 +63,31 @@ class _SettingsSelectionPageState<T> extends State<SettingsSelectionPage<T>> {
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              elevation: 0,
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              color: theme.colorScheme.surfaceContainerHighest,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  for (var i = 0; i < widget.options.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
-                    _optionTile(widget.options[i]),
+        child: CenteredContent(
+          maxWidth: 560,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                elevation: 0,
+                margin: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < widget.options.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                      _optionTile(widget.options[i]),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -109,9 +114,7 @@ class _SettingsSelectionPageState<T> extends State<SettingsSelectionPage<T>> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-      trailing: selected
-          ? Icon(Icons.check, color: primary, size: 20)
-          : null,
+      trailing: selected ? Icon(Icons.check, color: primary, size: 20) : null,
       onTap: () => setState(() => _selected = option.value),
     );
   }
@@ -165,12 +168,8 @@ class SoundPage extends ConsumerWidget {
     return SettingsSelectionPage<bool>(
       title: '音效',
       initial: current,
-      options: const [
-        SettingsOption(true, '开'),
-        SettingsOption(false, '关'),
-      ],
-      onConfirm: (v) =>
-          ref.read(settingsProvider.notifier).setSoundEnabled(v),
+      options: const [SettingsOption(true, '开'), SettingsOption(false, '关')],
+      onConfirm: (v) => ref.read(settingsProvider.notifier).setSoundEnabled(v),
     );
   }
 }
@@ -185,9 +184,7 @@ class MoveStylePage extends ConsumerWidget {
     return SettingsSelectionPage<MoveStyle>(
       title: '落子方式',
       initial: current,
-      options: [
-        for (final s in MoveStyle.values) SettingsOption(s, s.label),
-      ],
+      options: [for (final s in MoveStyle.values) SettingsOption(s, s.label)],
       onConfirm: (v) => ref.read(settingsProvider.notifier).setMoveStyle(v),
     );
   }

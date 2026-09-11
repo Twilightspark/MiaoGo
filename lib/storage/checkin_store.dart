@@ -44,15 +44,10 @@ class CheckinStore extends Notifier<CheckinState> {
 
   /// 当日已完成每日一题：把今天标记为打卡（幂等，不重复计）。
   void markToday({DateTime? now}) {
-    final key = _dateKey(now ?? DateTime.now());
+    final key = checkinDateKey(now ?? DateTime.now());
     if (state.completedDays.contains(key)) return;
     state = CheckinState(completedDays: {...state.completedDays, key});
     _persist();
-  }
-
-  /// 同步当日进度：仅当 [solved] >= [total] 时记打卡（幂等）。
-  void syncDaily({required int solved, required int total, DateTime? now}) {
-    if (total > 0 && solved >= total) markToday(now: now);
   }
 
   /// 清空打卡记录（重生用）。
@@ -73,6 +68,6 @@ final checkinStoreProvider =
     NotifierProvider<CheckinStore, CheckinState>(CheckinStore.new);
 
 /// 日期键：`YYYY-MM-DD`（本地日期）。
-String _dateKey(DateTime d) =>
+String checkinDateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-'
     '${d.day.toString().padLeft(2, '0')}';
