@@ -8,6 +8,24 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 - `1.x` — 视觉打磨与功能完善（小版本间迭代）
 - `2.0.0` — 新功能开发
 
+## [1.8.0] - 2026-09-07
+
+全应用响应式适配：横屏 / 平板两栏布局与居中限宽，竖屏行为保持不变。
+
+### Added
+
+- **响应式布局基建**：新增 `lib/ui/common/responsive.dart`——断点（`compact=600` / `medium=840` / `expanded=1200`，
+  `twoPane=720`）、`isWideLayout()`、居中限宽 `CenteredContent`、棋盘页左右两栏 `AdaptiveBoardLayout`。
+- **棋盘页横屏 / 平板两栏**：对局 / 观赛 / 复盘 / 死活题 / 定式 / 新手指引等在宽屏下自动变为
+  「棋盘在左、状态卡 / 胜率 / 操作按钮在右」（右栏可滚动）；竖屏分支与历史布局等价，现有 widget 测试零回归。
+- **列表 / 设置 / 表单页居中限宽**：快速匹配 / 休闲观赛 / 设置 / 选项 / 改名 / 棋谱 / 题库等按内容类型限宽，
+  避免平板被拉伸过宽；首页横屏改为左（功能卡）+ 右（快捷入口与可滚动历史记录）两栏。
+
+### Changed
+
+- 各页面统一接入响应式封装，移除各自硬编码的方向 / 宽度判断；
+  新增 `test/ui/responsive_layout_test.dart` 覆盖断点与两栏切换。
+
 ## [1.7.1] - 2026-09-07
 
 对手棋力对齐改用 KataGo Human SL（单引擎，覆盖 18级~9段），发布包同时覆盖 arm64-v8a + armeabi-v7a。
@@ -232,6 +250,7 @@ All notable changes to **MiaoGo（喵棋）** are documented in this file.
 
 - KataGo 引擎与模型均为本地资源，应用不发起网络请求。
 
+[1.8.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.8.0
 [1.7.1]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.7.1
 [1.7.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Twilightspark/MiaoGo/releases/tag/v1.6.0

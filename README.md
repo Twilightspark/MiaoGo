@@ -2,7 +2,7 @@
 
 > 安卓围棋对弈应用 · An Android Go (Weiqi/Baduk) app powered by a local **KataGo** AI engine.
 
-![Version](https://img.shields.io/badge/version-1.7.1-4C8B70)
+![Version](https://img.shields.io/badge/version-1.8.0-4C8B70)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -133,7 +133,11 @@ flutter build apk --release --split-per-abi --target-platform android-arm,androi
 
 详细变更见 [`CHANGELOG.md`](CHANGELOG.md)
 
-### 1.7.1（当前 · Current）
+### 1.8.0（当前 · Current）
+
+全应用响应式适配：横屏 / 平板两栏布局与居中限宽（详见 `CHANGELOG.md`）。
+
+### 1.7.1
 
 对手棋力对齐改用 KataGo Human SL（单引擎），发布包支持 arm64-v8a + armeabi-v7a（详见 `CHANGELOG.md`）。
 
