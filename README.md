@@ -235,6 +235,14 @@ Feel free to open issues and pull requests. See [`CONTRIBUTING.md`](CONTRIBUTING
 This project is licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE).
 KataGo engine, networks and bundled data are covered by their own licenses, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
+## 支持项目 · Support
+
+如果喵棋对你有帮助，欢迎通过 **爱发电** 请作者喝杯咖啡 ☕，你的支持是持续维护的动力：
+
+[![爱发电](https://img.shields.io/badge/爱发电-支持作者-946ce6?logo=afdian&logoColor=white)](https://afdian.com/a/miaogo)
+
+> 支持为自愿行为，不影响任何功能使用。If MiaoGo helps you, you can support the author on Afdian (optional, all features stay free).
+
 ## 联系 · Contact
 
 - GitHub: [Twilightspark/MiaoGo](https://github.com/Twilightspark/MiaoGo)
